@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import handler from '../.server-check/api/auth.js';
+const headers=new Map();
+let body='';
+const response={statusCode:0,setHeader(key,value){headers.set(key.toLowerCase(),value);},end(value){body=value.toString();}};
+await handler({url:'/api/auth/status',method:'GET',headers:{}},response,{});
+assert.equal(response.statusCode,200);
+assert.deepEqual(JSON.parse(body),{configured:false});
+assert.equal(headers.get('cache-control'),'no-store');
+console.log('Compiled Node ESM authentication endpoint passed.');

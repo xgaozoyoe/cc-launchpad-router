@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target":"ES2022", "module":"NodeNext", "moduleResolution":"NodeNext",
+    "rootDir":".", "outDir":".server-check", "strict":true,
+    "skipLibCheck":true, "verbatimModuleSyntax":true,
+    "rewriteRelativeImportExtensions":true, "types":["node"]
+  },
+  "include":["api/auth.ts","server/auth.ts","server/node-adapter.ts"]
+}

@@ -2,7 +2,7 @@
 
 A unified, launch-ID-based REST entry point for AI computing credit suppliers. **All providers must use FRPC to connect their local inference service to the platform’s central FRPS server.**
 
-[Provider hosting guide](docs/HOSTING.md) · [Platform operator guide](docs/FRP-HOSTING.md) · [中文说明](docs/README.zh-CN.md)
+[React UI source](apps/launchpad/README.md) · [Provider hosting guide](docs/HOSTING.md) · [Platform operator guide](docs/FRP-HOSTING.md) · [中文说明](docs/README.zh-CN.md)
 
 ## One platform address, separate launches
 
@@ -21,6 +21,12 @@ flowchart LR
 ```
 
 Providers do not publish their own Internet-facing API domains. The model and FRPC run on the GPU machine; GitHub hosts the code and instructions, not the GPU workload.
+
+## Web application
+
+The complete TypeScript/React UI and Google authentication backend are in [`apps/launchpad/`](apps/launchpad/). This includes the model catalog, buyer credits, supplier studio, PRL wallet, compute setup wizard and white paper download. See the [app README](apps/launchpad/README.md) for local setup, tests and Vercel deployment.
+
+The repository root contains the FRP infrastructure and launch router. The UI is currently a demo snapshot; integration with the launch registry remains pending.
 
 ## Included
 

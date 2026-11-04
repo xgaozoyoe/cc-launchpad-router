@@ -1,0 +1,12 @@
+node_modules
+dist/
+.sites-runtime/
+outputs/
+*.local
+
+.env
+.env.*
+!.env.example
+.vercel/
+
+.server-check/
