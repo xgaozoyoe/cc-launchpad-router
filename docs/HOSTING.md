@@ -1,5 +1,7 @@
 # From a local Qwen model to a hosted REST API
 
+**Platform suppliers should use [FRPC → central FRPS](FRP-HOSTING.md) for assigned URLs and uniform provider management.** The options below are standalone alternatives.
+
 The Docker kit already starts **vLLM, an inference HTTP server**. You do not need to write another REST backend just to call the model.
 
 ```mermaid

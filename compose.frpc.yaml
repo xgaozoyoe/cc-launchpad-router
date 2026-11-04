@@ -1,0 +1,11 @@
+# Platform-managed hosting. Copy the issued bundle into .secrets/frp-provider first.
+services:
+  frpc:
+    image: ghcr.io/fatedier/frpc:v0.71.1
+    restart: unless-stopped
+    command: ["-c", "/etc/frp/frpc.toml"]
+    volumes:
+      - ./.secrets/frp-provider:/etc/frp:ro
+    depends_on:
+      inference:
+        condition: service_healthy

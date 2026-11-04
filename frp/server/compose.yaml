@@ -1,0 +1,38 @@
+services:
+  frps:
+    image: ghcr.io/fatedier/frps:v0.71.1
+    restart: unless-stopped
+    command: ["-c", "/etc/frp/frps.toml"]
+    ports:
+      - "7000:7000"
+      - "127.0.0.1:7500:7500"
+    volumes:
+      - ../../.secrets/frp-server:/etc/frp:ro
+    depends_on:
+      - registry
+  registry:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python3", "/app/registry.py"]
+    environment:
+      REGISTRY_PATH: /data/registry.json
+    ports:
+      - "127.0.0.1:9090:9000"
+    volumes:
+      - ./registry.py:/app/registry.py:ro
+      - ../../.secrets/frp-server:/data:ro
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../.secrets/frp-server/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - frps
+volumes:
+  caddy-data:
+  caddy-config:
