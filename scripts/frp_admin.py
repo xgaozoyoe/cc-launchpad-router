@@ -32,7 +32,7 @@ def initialize(args):
         raise ValueError('Server configuration already exists; it was not overwritten')
     dest.mkdir(parents=True, mode=0o700)
     token = secrets.token_urlsafe(32)
-    config = {'server': args.server, 'domain': args.domain, 'providers': {}}
+    config = {'server': args.server, 'api_domain': args.api_domain, 'domain': 'providers.internal', 'providers': {}, 'launches': {}}
     write_private(dest / 'registry.json', json.dumps(config, indent=2) + '\n')
     # Self-signed CA/server certificate; providers pin this certificate and its DNS name.
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-nodes', '-days', '365',
@@ -45,7 +45,7 @@ def initialize(args):
     write_private(dest / 'frps.toml', f'''bindPort = 7000
 vhostHTTPPort = 8080
 vhostHTTPTimeout = 180
-subDomainHost = {json.dumps(args.domain)}
+subDomainHost = {json.dumps(config['domain'])}
 auth.method = "token"
 auth.tokenSource.type = "file"
 auth.tokenSource.file.path = "/etc/frp/token"
@@ -66,16 +66,15 @@ addr = "registry:9000"
 path = "/handler"
 ops = ["Login", "NewProxy"]
 ''')
-    write_private(dest / 'Caddyfile', '# Add providers using scripts/frp_admin.py add.\n')
+    write_private(dest / 'Caddyfile', caddy_config(config))
     print('Initialized private server config. Keep .secrets/frp-server private and backed up.')
 
 
 def caddy_config(registry):
-    # Explicit host blocks let Caddy issue individual certs without a wildcard DNS plugin.
-    return '\n'.join(f'''{item['id']}.{registry['domain']} {{
-    @api path /v1/models /v1/chat/completions
+    return f'''{registry['api_domain']} {{
+    @api path /launches/*/v1/models /launches/*/v1/chat/completions
     handle @api {{
-        reverse_proxy frps:8080 {{
+        reverse_proxy router:8001 {{
             flush_interval -1
         }}
     }}
@@ -83,7 +82,30 @@ def caddy_config(registry):
         respond "Not found" 404
     }}
 }}
-''' for item in registry['providers'].values() if item['enabled'])
+'''
+
+
+def save_registry(path, registry):
+    temp = path.with_suffix('.tmp')
+    write_private(temp, json.dumps(registry, indent=2) + '\n')
+    temp.replace(path)
+
+
+def add_launch(args):
+    if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}', args.id):
+        raise ValueError('Launch ID must be 1–80 letters, numbers, underscores or hyphens')
+    path = ROOT / '.secrets/frp-server/registry.json'
+    registry = json.loads(path.read_text())
+    provider = registry['providers'].get(args.provider)
+    if not provider or not provider['enabled']:
+        raise ValueError('Assign an enabled provider first')
+    if args.id in registry['launches']:
+        raise ValueError('Launch ID already exists; binding was not changed')
+    registry['launches'][args.id] = {'id': args.id, 'provider_id': args.provider,
+        **{k: provider[k] for k in MODEL}, 'enabled': True,
+        'endpoint': f"https://{registry['api_domain']}/launches/{args.id}/v1"}
+    save_registry(path, registry)
+    print('Launch API:', registry['launches'][args.id]['endpoint'])
 
 
 def add_provider(args):
@@ -98,7 +120,7 @@ def add_provider(args):
     credential = secrets.token_urlsafe(32)
     registry['providers'][args.id] = {'id': args.id, **MODEL, 'enabled': True,
         'credential_sha256': hashlib.sha256(credential.encode()).hexdigest(),
-        'endpoint': f"https://{args.id}.{registry['domain']}/v1"}
+        'upstream_host': f"{args.id}.{registry['domain']}"}
     write_private(bundle / 'ca.crt', (server / 'ca.crt').read_text())
     write_private(bundle / 'token', (server / 'token').read_text())
     write_private(bundle / 'frpc.toml', f'''serverAddr = {json.dumps(registry['server'])}
@@ -122,13 +144,9 @@ localIP = "inference"
 localPort = 8000
 subdomain = {json.dumps(args.id)}
 ''')
-    temp = path.with_suffix('.tmp')
-    write_private(temp, json.dumps(registry, indent=2) + '\n')
-    temp.replace(path)
-    (server / 'Caddyfile').write_text(caddy_config(registry))
+    save_registry(path, registry)
     print('Issued private provider bundle:', bundle.relative_to(ROOT))
-    print('Assigned API:', registry['providers'][args.id]['endpoint'])
-    print('Reload central Caddy after adding a provider. No inference API key is included.')
+    print('Provider registered; bind a launch ID with the launch command. No inference API key is included.')
 
 
 def main():
@@ -136,19 +154,26 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     init = commands.add_parser('init')
     init.add_argument('--server', type=dns, required=True)
-    init.add_argument('--domain', type=dns, required=True)
+    init.add_argument('--api-domain', type=dns, required=True)
     add = commands.add_parser('add')
     add.add_argument('--id', required=True)
+    launch = commands.add_parser('launch')
+    launch.add_argument('--id', required=True)
+    launch.add_argument('--provider', required=True)
     commands.add_parser('list')
     args = parser.parse_args()
     if args.command == 'init':
         initialize(args)
     elif args.command == 'add':
         add_provider(args)
+    elif args.command == 'launch':
+        add_launch(args)
     else:
         registry = json.loads((ROOT / '.secrets/frp-server/registry.json').read_text())
         for item in registry['providers'].values():
-            print(item['id'], item['model'], item['endpoint'], 'registered-unverified')
+            print('provider', item['id'], item['model'], 'registered-unverified')
+        for item in registry['launches'].values():
+            print('launch', item['id'], item['provider_id'], item['endpoint'], 'registered-unverified')
 
 
 if __name__ == '__main__':

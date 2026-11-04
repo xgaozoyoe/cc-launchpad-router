@@ -18,13 +18,14 @@ def module(name, path):
 
 admin = module('admin', 'scripts/frp_admin.py')
 registry = module('registry', 'frp/server/registry.py')
+router = module('router', 'frp/server/router.py')
 
 
 class PolicyTests(unittest.TestCase):
     def setUp(self):
         self.entries = {'gpu-001': {'id': 'gpu-001', 'enabled': True,
             'credential_sha256': hashlib.sha256(b'private-provider-token').hexdigest(),
-            **admin.MODEL, 'endpoint': 'https://gpu-001.compute.example.com/v1'}}
+            **admin.MODEL, 'endpoint': 'https://gpu-001.providers.internal/v1'}}
         self.user = {'user': 'gpu-001', 'metas': {'provider_token': 'private-provider-token'}}
         self.proxy = {'user': self.user, 'proxy_type': 'http', 'proxy_name': 'gpu-001.inference', 'subdomain': 'gpu-001'}
 
@@ -48,18 +49,41 @@ class PolicyTests(unittest.TestCase):
         self.assertNotIn('credential_sha256', record)
         self.assertEqual(record['status'], 'registered-unverified')
 
+    def test_launch_id_routes_are_isolated_and_model_bound(self):
+        provider = self.entries['gpu-001']
+        launch = {'id': 'launch-a', 'provider_id': 'gpu-001', 'enabled': True,
+                  **{k: provider[k] for k in admin.MODEL}}
+        data = {'providers': self.entries, 'launches': {'launch-a': launch}}
+        route = router.resolve('/launches/launch-a/v1/chat/completions', 'POST', data)
+        self.assertEqual(route['host'], 'gpu-001.providers.internal')
+        self.assertEqual(route['path'], '/v1/chat/completions')
+        self.assertIsNone(router.resolve('/launches/unknown/v1/models', 'GET', data))
+        self.assertIsNone(router.resolve('/launches/launch-a/v1/models', 'POST', data))
+        self.assertIsNone(router.resolve('/launches/../v1/models', 'GET', data))
+        launch['revision'] = 'different'
+        self.assertIsNone(router.resolve('/launches/launch-a/v1/models', 'GET', data))
+        launch['revision'] = provider['revision']
+        provider['enabled'] = False
+        self.assertIsNone(router.resolve('/launches/launch-a/v1/models', 'GET', data))
+
     def test_provisioned_bundle_has_bound_identity_and_valid_toml(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(admin, 'ROOT', Path(tmp)):
             class Args:
                 server = 'frps.example.com'
-                domain = 'compute.example.com'
+                api_domain = 'api.example.com'
                 id = 'gpu-001'
             admin.initialize(Args())
             admin.add_provider(Args())
+            Args.id = 'launch-001'
+            Args.provider = 'gpu-001'
+            admin.add_launch(Args())
+            Args.id = 'gpu-001'
             base = Path(tmp) / '.secrets'
             server = tomllib.loads((base / 'frp-server/frps.toml').read_text())
             client = tomllib.loads((base / 'frp-bundles/gpu-001/frpc.toml').read_text())
-            self.assertEqual(server['subDomainHost'], Args.domain)
+            self.assertEqual(server['subDomainHost'], 'providers.internal')
+            self.assertNotIn('gpu-001.', (base / 'frp-server/Caddyfile').read_text())
+            self.assertIn('api.example.com', (base / 'frp-server/Caddyfile').read_text())
             self.assertEqual(client['user'], Args.id)
             self.assertEqual(client['proxies'][0]['localIP'], 'inference')
             self.assertEqual(client['transport']['tls']['serverName'], Args.server)

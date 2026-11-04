@@ -43,7 +43,7 @@ def authorize(op, content, entries):
 
 
 def provider_list(entries):
-    return [{k: item[k] for k in ('id', 'model', 'revision', 'precision', 'context', 'endpoint', 'enabled')}
+    return [{k: item[k] for k in ('id', 'model', 'revision', 'precision', 'context', 'enabled')}
             | {'status': 'registered-unverified'} for item in entries.values()]
 
 
@@ -58,10 +58,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path != '/providers':
+        if self.path not in ('/providers', '/launches'):
             return self.reply(404, {'error': 'Not found'})
         try:
-            self.reply(200, {'providers': provider_list(read_registry()['providers'])})
+            data = read_registry()
+            self.reply(200, {'providers': provider_list(data['providers'])} if self.path == '/providers' else {'launches': list(data['launches'].values())})
         except (OSError, ValueError, KeyError, TypeError):
             self.reply(503, {'error': 'Registry unavailable'})
 

@@ -1,161 +1,114 @@
-# Platform-managed inference with frpc → frps
+# Central FRPS and unified launch-ID router
 
-This is the preferred supplier connectivity path. Providers only need outbound connectivity to the platform FRPS server; they do not need their own public IP, domain or router port forwarding.
-
-```mermaid
-flowchart LR
-  A[Buyer / Launchpad gateway] -->|HTTPS + inference API key| B[Central Caddy :443]
-  B -->|Host: gpu-001.compute.example.com| C[Central frps :8080]
-  D[Provider frpc] -->|Outbound TLS tunnel :7000| C
-  D -->|Private Docker network| E[vLLM inference:8000]
-  C -. Login / NewProxy authorization .-> F[Private provider registry]
-```
-
-The platform assigns a unique provider ID and endpoint:
+FRPC is required for every provider. The platform owns the public API hostname and resolves each **launch ID** to an assigned provider’s FRPC tunnel and exact model profile.
 
 ```text
-Provider: gpu-001
-Model: Qwen/Qwen3-8B-AWQ · AWQ 4-bit · 4096 context
-API base URL: https://gpu-001.compute.example.com/v1
-Served model ID: qwen3-8b-awq
+https://api.example.com/launches/launch-001/v1
+https://api.example.com/launches/launch-002/v1
 ```
 
-The API URL stays stable when the provider's home IP changes. All providers use the same REST request/response schema. Providers do not select arbitrary public routes.
+These are two credit launches on one public hostname, not provider-owned domains. A launch ID identifies a credit issuance; a provider ID identifies a tunnel. Multiple launches can share a provider tunnel for its configured model, subject to capacity controls outside this starter.
 
-## Platform operator: prepare the central server
+## 1. Initialize the central host
 
-Use a public Linux server with Docker, Compose v2, Python 3.11+ and OpenSSL supporting `req -addext`. The central server does **not** need a GPU.
+Use a public Linux server with Docker, Compose v2, Python 3.11+ and OpenSSL supporting `req -addext`. It does not need a GPU.
 
-1. Choose the control hostname, e.g. `frps.example.com`, and an inference suffix, e.g. `compute.example.com`.
-2. Point `frps.example.com` and `*.compute.example.com` DNS A records to the central server. Set AAAA only if IPv6 works.
-3. Allow inbound TCP 7000 (provider tunnels) and 80/443 (HTTPS certificate issuance / API traffic). Keep 7500, 8080 and 9090 off the public Internet.
-4. In the repository root, generate private server settings and issue the first provider:
+- Point `frps.example.com` and `api.example.com` DNS A records at the server. Only add AAAA when IPv6 works. No wildcard provider DNS is needed.
+- Allow inbound TCP 7000 for provider tunnels and 80/443 for HTTPS and certificate issuance.
+- Do not publicly expose 7500, 8080, 8001 or 9090.
+
+Run in the repository root:
 
 ```bash
-python3 scripts/frp_admin.py init --server frps.example.com --domain compute.example.com
+python3 scripts/frp_admin.py init --server frps.example.com --api-domain api.example.com
 python3 scripts/frp_admin.py add --id gpu-001
-```
-
-This generates a pinned self-signed tunnel certificate valid for 365 days, a shared FRP transport token, an independent credential for each provider, a private registry, and explicit Caddy hostname routes. Keys and provider credentials are never printed or committed. The generated `.secrets/frp-server/ca.crt` also serves as the tunnel server certificate; distribute its public certificate in provider bundles and plan certificate renewal before expiry. Back up server configuration securely.
-
-5. Start the central stack:
-
-```bash
+python3 scripts/frp_admin.py launch --id launch-001 --provider gpu-001
 docker compose -f frp/server/compose.yaml up -d
-docker compose -f frp/server/compose.yaml logs -f frps
 ```
 
-Caddy issues a public HTTPS certificate for each assigned provider hostname. It forwards only `/v1/models` and `/v1/chat/completions`, preserving the Host header for FRPS routing and promptly flushing streamed responses. Port 8080 is reachable only inside the Docker network.
+Use actual hostnames and the launch ID from the platform credit launch record. The `launch` command refuses to overwrite an existing binding.
 
-To add another provider:
+The stack contains:
 
-```bash
-python3 scripts/frp_admin.py add --id gpu-002
-docker compose -f frp/server/compose.yaml exec https caddy reload --config /etc/caddy/Caddyfile
-```
+| Service | Role |
+| --- | --- |
+| Caddy | One public HTTPS hostname; forwards launch-scoped API paths to the router |
+| Launch router | Resolves launch ID → enabled provider + matching model; proxies via private FRPS HTTP ingress |
+| FRPS | Accepts provider FRPC tunnels over verified TLS; routes internal provider Hosts |
+| Private registry/plugin | Authorizes tunnel identities and route ownership; lists configured providers and launches |
 
-The registry rereads registrations on each authorization request. Caddy must be reloaded after adding routes. Do not start the central stack before assigning its first provider; an empty Caddyfile has no API hosts.
+FRPS uses `providers.internal` solely as a private Host-routing suffix. For example, the router sends `Host: gpu-001.providers.internal` to `frps:8080`. These internal names need no DNS records, are never buyer API endpoints, and cannot be chosen by public callers.
 
-## Deliver each provider's bundle privately
+## 2. Deliver the provider bundle
 
-The operator-generated directory `.secrets/frp-bundles/gpu-001/` contains:
+Initialization generates private server configuration in `.secrets/frp-server/`. Each `add` command issues a private `.secrets/frp-bundles/<provider-id>/` directory with:
 
-- `frpc.toml`: provider identity, assigned hostname, provider credential and TLS settings.
-- `ca.crt`: public certificate pinned to the FRPS server hostname.
+- `frpc.toml`: provider identity, credential and tunnel settings.
+- `ca.crt`: pinned public FRPS certificate.
 - `token`: FRP transport token.
 
-Send **only that provider's bundle**, using a secure channel. Never send the central server directory, `server.key`, another provider's bundle or the registry. Do not add real credentials to GitHub issues, chat or the public repository.
+Deliver only that provider’s bundle through a secure channel. Never deliver `server.key`, the registry or another provider’s bundle. The [provider guide](HOSTING.md) explains where to install the bundle and how to run Qwen + FRPC.
 
-Two distinct credentials exist:
+The generated tunnel certificate is valid for 365 days; renew and redistribute the public trust certificate before expiry. The starter uses a shared FRP transport token plus an independently checked per-provider credential. A production identity service may replace the shared transport token with per-provider OIDC/mTLS.
 
-| Credential | What it authorizes |
-| --- | --- |
-| FRP transport token + per-provider credential | Connecting the provider tunnel and registering only its assigned HTTP route |
-| vLLM inference API key | Calling the model through that route |
-
-The shared FRP token alone is insufficient: the private authorization plugin also checks the per-provider credential and route ownership. Before larger production rollout, consider per-provider OIDC or mTLS identities to remove the shared transport-token dependency.
-
-## Provider: connect the Qwen REST API
-
-On the provider's Linux NVIDIA GPU machine:
+## 3. Register additional launches
 
 ```bash
-git clone https://github.com/xgaozoyoe/cc-launchpad-router.git
-cd cc-launchpad-router
-python3 scripts/setup.py
-mkdir -p .secrets/frp-provider
-chmod 700 .secrets .secrets/frp-provider
+# Same provider/model, separate credit launch:
+python3 scripts/frp_admin.py launch --id launch-002 --provider gpu-001
+
+# A different provider:
+python3 scripts/frp_admin.py add --id gpu-002
+python3 scripts/frp_admin.py launch --id launch-003 --provider gpu-002
 ```
 
-Copy the three files from your issued bundle into `.secrets/frp-provider/` and restrict read access to your user. Keep the directory name exactly as shown. Then:
+The registry is reread per request; adding providers/launches does not require Caddy hostname changes. Public URLs are always `https://<api-domain>/launches/<launch-id>/v1`.
 
-```bash
-docker compose -f compose.yaml -f compose.frpc.yaml up --build -d
-docker compose -f compose.yaml -f compose.frpc.yaml logs -f frpc
+The router accepts only:
+
+```text
+GET  /launches/<launch-id>/v1/models
+POST /launches/<launch-id>/v1/chat/completions
 ```
 
-`frpc` waits for vLLM's health check, verifies the FRPS certificate and server name, and connects outward on TCP 7000. It forwards requests to `inference:8000` on the Compose network; **do not change that to localhost**, which would refer to the frpc container itself.
+It removes the launch prefix before forwarding to vLLM, forwards SSE as it arrives, and returns `X-Launch-ID` for tracing. Missing/disabled launches or providers and mismatched model profiles are rejected. Provider outages produce an unavailable response; no automatic failover is implemented.
 
-Verify local inference and then the assigned public API URL:
-
-```bash
-python3 scripts/smoke.py
-python3 scripts/smoke.py --base-url https://gpu-001.compute.example.com/v1
-```
-
-Use your actual assigned hostname. Both tests use the inference API key in the provider's `.env`. No GPU or central server has been deployed by this repository edit; these commands must be run on the respective machines.
-
-## Uniform listing and management
+## 4. List and manage entries
 
 On the central host:
 
 ```bash
 python3 scripts/frp_admin.py list
 curl --fail http://127.0.0.1:9090/providers
+curl --fail http://127.0.0.1:9090/launches
 ```
 
-The private JSON list includes provider ID, model, revision, precision, context, assigned endpoint and enabled flag. Credentials are excluded. This is a **registration list**, with status `registered-unverified`; a connected tunnel is not proof of model availability or reserved GPU capacity.
+The provider list excludes credentials. Entries are registrations, not proof of live capacity; status is `registered-unverified`. The FRPS dashboard on central-host loopback `127.0.0.1:7500` shows live tunnel/proxy statistics. Its random password is in private `frps.toml`; access it through operator SSH rather than publishing it.
 
-For live FRP proxy / connection statistics, the FRPS dashboard is published to **central-host loopback only**, `127.0.0.1:7500`. Its random operator password is in the private generated `frps.toml`; access it through an authenticated operator SSH session or SSH port forwarding. Do not expose the dashboard or registration service publicly.
+To suspend one launch, set that launch’s `enabled` flag to `false` in `.secrets/frp-server/registry.json` using an operator-only editor. New requests to its URL are rejected without changing other launches. Already-running requests are not interrupted.
 
-To revoke a provider for this starter:
+To disable a provider, set its `enabled` flag to `false`. The router immediately rejects new requests to all its launches, and the authorization plugin denies new tunnel sessions/routes. Restart FRPS to drop established tunnels if required; that restart briefly disconnects every provider. A future controller should automate audited provider-specific disconnects.
 
-1. Set its `enabled` field to `false` in `.secrets/frp-server/registry.json` using an operator-only editor.
-2. Remove its host block from the generated Caddyfile and reload Caddy.
-3. Restart FRPS to drop existing connections. This briefly disconnects **all** providers; their clients reconnect automatically, but the disabled provider is denied.
+## Authentication and credit accounting
 
-The plugin denies new sessions and routes for disabled providers; editing the registry alone does not terminate an established tunnel. A future platform controller should automate provider-specific disconnect/revoke and auditable changes.
+Three layers must remain distinct:
 
-## How Launchpad should use this
+1. FRP transport/provider credentials admit the supplier tunnel and restrict its internal route.
+2. Supplier inference credentials authenticate requests to vLLM.
+3. Buyer identity and launch-specific credits authorize consumption through the production Launchpad gateway.
 
-1. Create a provider record and assign its identity / hostname.
-2. Deliver the issued bundle through an authenticated onboarding flow.
-3. Observe the tunnel connection; separately test model identity, auth, response/streaming format and usage.
-4. Measure inference throughput / latency and reserve capacity before allowing credit issuance.
-5. Route buyer requests through the platform gateway, keeping supplier inference keys in a server-side vault.
-6. Bind credits to the provider/resource/model revision; meter requests and handle failover in the gateway.
+The current transport router only forwards a supplier Bearer key for operator smoke testing. It does not implement buyer authentication, a credential vault, credit reservation/burning, metering, PRL staking or failover. Do not give supplier credentials to buyers. Production requires the gateway to check credits for the requested launch ID and inject the supplier key server-side.
 
-FRP transports requests; it does not implement credit accounting, PRL staking or burning, inference authentication, GPU ownership verification or failover. The current Launchpad UI remains a simulated setup flow and is not synchronized with this registry yet.
+The manual `launch` command is a bootstrap step. The production application should register the same launch ID atomically when credit issuance is approved and bind it to the verified provider/model. The existing demo website is not synchronized with this registry yet.
 
-## Authorization rules
+## Verification
 
-The small private `registry.py` plugin handles FRP `Login` and `NewProxy`. It allows an enabled, correctly authenticated provider to publish exactly one HTTP proxy named `<provider-id>.inference` on its own subdomain. It rejects other proxy types, custom domains, route groups, rewritten hosts and overlapping route paths. An unavailable or malformed registry fails closed.
-
-The central host and FRPS operator handle unencrypted prompts inside the server's private Docker network after HTTPS termination; choose an appropriate trust and data-handling model. A compromised provider still controls its local model and can misreport its capacity. Do not equate successful FRP admission with trusted inference.
-
-## Verification and references
-
-FRP client/server are pinned to the same version, `v0.71.1`. Verified with official release binaries on localhost: TLS tunnel establishment, model-discovery forwarding, preserved inference API-key authentication, and rejection of another provider’s hostname. This test uses a mock inference service; Docker deployment, public ACME certificates and GPU inference were not tested.
-
-Run unit checks with:
+FRPC/FRPS are pinned to `v0.71.1`. Tests cover credential rejection, provider route ownership, launch-ID/model binding, real local FRP TLS transport, model discovery, API authentication and streamed output through the launch router. The end-to-end test uses a mock model service, not GPU inference. Docker deployment and public ACME certificates are not verified here.
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-To repeat the optional real-tunnel test, obtain official matching binaries, verify their release checksums, then run `FRP_BIN_DIR=/path/to/binaries python3 -m unittest discover -s tests -v`. Without this variable the integration test is skipped.
+To include the real-tunnel test, obtain official matching binaries, verify their checksums and set `FRP_BIN_DIR=/path/to/binaries`. Otherwise that test is skipped.
 
-- [FRP subdomain routing](https://gofrp.org/en/docs/features/http-https/subdomain/)
-- [FRP TLS verification](https://gofrp.org/en/docs/features/common/network/network-tls/)
-- [FRP server authorization plugins](https://gofrp.org/en/docs/features/common/server-plugin/)
-- [FRP dashboard](https://gofrp.org/en/docs/features/common/ui/)
+References: [FRP routing](https://gofrp.org/en/docs/features/http-https/subdomain/), [TLS verification](https://gofrp.org/en/docs/features/common/network/network-tls/), [server plugins](https://gofrp.org/en/docs/features/common/server-plugin/).

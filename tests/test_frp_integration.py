@@ -38,10 +38,14 @@ class TunnelTest(unittest.TestCase):
             tmp = Path(tmp)
             class Args:
                 server = 'frps.example.com'
-                domain = 'compute.example.com'
+                api_domain = 'api.example.com'
                 id = 'gpu-001'
             admin.initialize(Args())
             admin.add_provider(Args())
+            Args.id = 'launch-001'
+            Args.provider = 'gpu-001'
+            admin.add_launch(Args())
+            Args.id = 'gpu-001'
             private = tmp / '.secrets/frp-server'
             bundle = tmp / '.secrets/frp-bundles/gpu-001'
             registry.read_registry = lambda: json.loads((private / 'registry.json').read_text())
@@ -54,6 +58,18 @@ class TunnelTest(unittest.TestCase):
                         self.end_headers()
                         return
                     self.send_response(200)
+                    self.send_header('Content-Length', str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                def do_POST(self):
+                    self.rfile.read(int(self.headers.get('Content-Length', 0)))
+                    if self.headers.get('Authorization') != 'Bearer inference-test-key':
+                        self.send_response(401)
+                        self.end_headers()
+                        return
+                    body = b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: [DONE]\n\n'
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/event-stream')
                     self.send_header('Content-Length', str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
@@ -90,14 +106,36 @@ class TunnelTest(unittest.TestCase):
                 result = None
                 for _ in range(60):
                     try:
-                        result = call('gpu-001.compute.example.com')
+                        result = call('gpu-001.providers.internal')
                         break
                     except (URLError, TimeoutError, ConnectionError):
                         time.sleep(.1)
                 self.assertEqual(result, {'data': [{'id': 'qwen3-8b-awq'}]}, 'Real FRP tunnel did not become ready')
                 with self.assertRaises(HTTPError) as error:
-                    call('gpu-001.compute.example.com', auth=False)
+                    call('gpu-001.providers.internal', auth=False)
                 self.assertEqual(error.exception.code, 401)
+                # Exercise the uniform launch-ID API through the real FRP tunnel.
+                router = load('integration_router', 'frp/server/router.py')
+                public = ThreadingHTTPServer(('127.0.0.1', 0), router.Handler)
+                threading.Thread(target=public.serve_forever, daemon=True).start()
+                try:
+                    with patch.dict(os.environ, {'REGISTRY_PATH': str(private / 'registry.json'),
+                            'FRPS_HOST': '127.0.0.1', 'FRPS_HTTP_PORT': str(http)}):
+                        base = f'http://127.0.0.1:{public.server_port}/launches/launch-001/v1'
+                        with urlopen(Request(base + '/models', headers={'Authorization': 'Bearer inference-test-key'})) as reply:
+                            self.assertEqual(reply.headers['X-Launch-ID'], 'launch-001')
+                            self.assertEqual(json.load(reply), result)
+                        with urlopen(Request(base + '/chat/completions', data=b'{"stream":true}',
+                                headers={'Authorization': 'Bearer inference-test-key', 'Content-Type': 'application/json'})) as reply:
+                            self.assertIn(b'data: [DONE]', reply.read())
+                            self.assertEqual(reply.headers['Content-Type'], 'text/event-stream')
+                        with self.assertRaises(HTTPError) as error:
+                            urlopen(Request(base.replace('launch-001', 'wrong-launch') + '/models',
+                                    headers={'Authorization': 'Bearer inference-test-key'}))
+                        self.assertEqual(error.exception.code, 404)
+                finally:
+                    public.shutdown()
+                    public.server_close()
                 # Stop the legitimate client, then try to claim another provider's route with its valid identity.
                 processes[-1].terminate()
                 processes[-1].wait(timeout=5)
@@ -113,7 +151,7 @@ class TunnelTest(unittest.TestCase):
                     time.sleep(.1)
                 self.assertTrue(denied, 'Route takeover did not produce an authorization denial')
                 with self.assertRaises(HTTPError) as error:
-                    call('gpu-002.compute.example.com')
+                    call('gpu-002.providers.internal')
                 self.assertEqual(error.exception.code, 404)
             finally:
                 for process in processes:
