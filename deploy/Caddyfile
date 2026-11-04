@@ -1,0 +1,15 @@
+{
+  email {$ACME_EMAIL}
+}
+
+{$INFERENCE_DOMAIN} {
+  @api path /v1/models /v1/chat/completions
+  handle @api {
+    reverse_proxy inference:8000 {
+      flush_interval -1
+    }
+  }
+  handle {
+    respond "Not found" 404
+  }
+}
