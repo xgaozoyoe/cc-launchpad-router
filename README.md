@@ -2,7 +2,7 @@
 
 Run a quantized Qwen model on your own NVIDIA GPU and expose an authenticated, OpenAI-compatible REST API for an AI Computing Credit Launchpad supplier.
 
-**[Preferred: platform-managed FRP hosting](docs/FRP-HOSTING.md)** · [Standalone hosting alternatives](docs/HOSTING.md) · [中文说明](docs/README.zh-CN.md)
+**[Provider hosting quickstart](docs/HOSTING.md)** · [Central FRPS operator guide](docs/FRP-HOSTING.md) · [Standalone alternatives](docs/STANDALONE-HOSTING.md) · [中文说明](docs/README.zh-CN.md)
 
 This starter provides the **supplier inference endpoint**. Credit issuance, PRL staking, payments, model verification and platform routing remain outside this repository.
 
@@ -103,7 +103,7 @@ flowchart LR
 
 Use the **[FRP hosting guide](docs/FRP-HOSTING.md)** for the platform-managed path: providers run `frpc` beside inference, connect to your central `frps`, and receive stable URLs such as `https://gpu-001.compute.example.com/v1`. The central operator assigns identities and can list registered providers uniformly.
 
-The older [standalone hosting guide](docs/HOSTING.md) remains available for suppliers managing their own HTTPS domain or Cloudflare tunnel.
+The [standalone hosting guide](docs/STANDALONE-HOSTING.md) remains available for suppliers managing their own HTTPS domain or Cloudflare tunnel.
 
 Then test the public URL:
 

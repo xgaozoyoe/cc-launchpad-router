@@ -1,150 +1,117 @@
-# From a local Qwen model to a hosted REST API
+# Host your Qwen REST API through the platform FRPS server
 
-**Platform suppliers should use [FRPC → central FRPS](FRP-HOSTING.md) for assigned URLs and uniform provider management.** The options below are standalone alternatives.
+Computing providers run **frpc beside their local model** and connect to the platform’s central **frps** server. The platform assigns each provider a stable HTTPS API address, allowing providers to be listed and managed uniformly.
 
-The Docker kit already starts **vLLM, an inference HTTP server**. You do not need to write another REST backend just to call the model.
+The Qwen Docker container already runs a REST API through vLLM. FRP makes that API reachable through the platform; providers do not need to write another API server, buy a domain, open an inbound router port or configure their own HTTPS proxy.
 
 ```mermaid
 flowchart LR
-    A[Launchpad server or API client] -->|HTTPS + Bearer API key| B[Domain / reverse proxy or named tunnel]
-    B -->|private Docker network: port 8000| C[vLLM REST API]
-    C --> D[Local NVIDIA GPU: Qwen3 8B AWQ]
-    D --> C
-    C -->|answer + token usage| A
+    A[Launchpad gateway] -->|HTTPS + inference API key| B[Platform HTTPS entry]
+    B -->|Provider hostname| C[Central frps]
+    D[Provider frpc] -->|Outbound TLS tunnel| C
+    D -->|Private Docker network| E[Local vLLM REST API]
+    E --> F[Qwen on provider GPU]
 ```
 
-GitHub hosts the source and these instructions. **GitHub Pages and Vercel do not run the GPU container.** Your GPU machine must remain online to deliver inference.
+## Who runs what?
 
-## 1. Start the local API
+| Party | Responsibility |
+| --- | --- |
+| Platform operator | Public FRPS server, DNS, HTTPS, provider identities and assigned routes |
+| Computing provider | GPU, Qwen inference container, frpc connector and inference API key |
+| Launchpad gateway | Supplier credential storage, model/capacity checks, request routing and credit accounting |
 
-On your Linux x86_64 NVIDIA GPU machine, open the repository folder:
+**Operators:** complete the [central server setup and provider provisioning guide](FRP-HOSTING.md#platform-operator-prepare-the-central-server) first. The steps below are for computing providers after the operator has issued their configuration.
 
-```bash
-python3 scripts/setup.py
-docker compose up --build -d
-docker compose logs -f inference
-```
+## 1. Get your provider configuration
 
-After model loading finishes:
-
-```bash
-python3 scripts/smoke.py
-```
-
-Local API base URL: `http://127.0.0.1:8000/v1`.
-Served model ID: `qwen3-8b-awq`.
-The API key is generated in your local `.env`; do not commit or paste it into the website demo.
-The smoke script reads it without printing it. `/v1/models` and `/v1/chat/completions` require it.
-
-`localhost` means the machine making the request. A cloud platform cannot call your home PC by using `127.0.0.1`.
-
-## 2. Choose the hosting path
-
-| Your machine | Use | Needs |
-| --- | --- | --- |
-| Cloud GPU / public server | Caddy HTTPS profile | Domain, public IP, reachable TCP 80/443 |
-| Home / office behind NAT or CGNAT | Named Cloudflare Tunnel | Cloudflare-managed domain, named tunnel, outbound connectivity |
-| Only trying on the same machine | Local API | No domain or external access |
-
-### A. Public GPU server: automatic HTTPS with Caddy
-
-1. Point your domain's DNS A record to the GPU server's public IPv4 address. Only add AAAA if IPv6 actually works.
-2. Allow inbound TCP 80/443 in the cloud firewall and host firewall. Leave port 8000 bound to localhost.
-3. Add these values to `.env` (replace with your own hostname and email):
-
-```dotenv
-INFERENCE_DOMAIN=inference.example.com
-ACME_EMAIL=operator@example.com
-```
-
-4. Start the HTTPS profile:
-
-```bash
-docker compose -f compose.yaml -f compose.https.yaml up --build -d
-docker compose -f compose.yaml -f compose.https.yaml logs -f https
-```
-
-Caddy obtains and renews a TLS certificate, routes the two supported REST paths to `inference:8000`, and flushes streamed output promptly. API-key authentication remains enforced by vLLM. Other paths, including `/health`, are not published by this profile.
-
-Your external API base URL is now `https://inference.example.com/v1`.
-
-Check from another machine with the same API key supplied as `INFERENCE_API_KEY` in its environment (or run from the original machine with the local `.env`):
-
-```bash
-python3 scripts/smoke.py --base-url https://inference.example.com/v1
-```
-
-No browser login should be required for this API. Do not disable TLS verification to make a test pass.
-
-### B. Home GPU behind a router: named Cloudflare Tunnel
-
-This connects outward from the GPU host; no incoming port forwarding is needed.
-
-1. Use your Cloudflare account and a domain managed there. Create a **named, remotely managed Cloudflare Tunnel** in its dashboard.
-2. Configure a published application route:
-   - Hostname: `inference.example.com`
-   - Service type: HTTP
-   - Service URL: `inference:8000`
-   - Do not enter `localhost:8000`: the tunnel connector runs in a separate container, where localhost refers to itself.
-3. On the GPU host create a private `.secrets` directory and save only the tunnel token in `.secrets/tunnel-token` using your local editor. Do not include a `docker run` command or quotation marks in the file. Do not paste the token into chat or commit it.
-
-```bash
-mkdir -p .secrets
-chmod 700 .secrets
-# Create .secrets/tunnel-token in your local editor before the next command.
-chmod 600 .secrets/tunnel-token
-```
-
-4. Start the connector on the same Docker network as inference:
-
-```bash
-docker compose -f compose.yaml -f compose.tunnel.yaml up --build -d
-docker compose -f compose.yaml -f compose.tunnel.yaml logs -f tunnel
-```
-
-5. Test the HTTPS URL:
-
-```bash
-python3 scripts/smoke.py --base-url https://inference.example.com/v1
-```
-
-Keep vLLM Bearer authentication enabled. A Cloudflare Access interactive email login would block machine API clients; if you add Access, configure service-to-service credentials in the gateway too. This minimal profile does not implement those additional credentials.
-
-For a public supplier service, restrict tunnel routes to required API paths and add suitable rate limits before accepting buyer traffic. Tunnel services terminate TLS and handle transit traffic; account for that when choosing how to handle prompts.
-
-**Do not use a temporary Quick Tunnel for credit-backed service:** its hostname changes, it has no uptime guarantee, and it does not support SSE streaming. Use the named tunnel or the Caddy route.
-
-The optional Caddy / cloudflared profiles use upstream rolling tags. Review the chosen images and lock image digests before a production rollout. No external service is started by merely downloading this repository.
-
-## 3. What goes into Launchpad?
+Ask the platform operator for your provider ID, assigned API URL and private FRPC bundle. For example:
 
 | Field | Example |
 | --- | --- |
-| Resource name | My Qwen GPU |
-| Catalog model | Qwen3 8B AWQ, 4-bit, 4K context |
-| API base URL | `https://inference.example.com/v1` |
+| Provider ID | `gpu-001` |
+| Public API base URL | `https://gpu-001.compute.example.com/v1` |
+| Catalog model | Qwen3 8B AWQ · 4-bit · 4096 context |
 | Served model ID | `qwen3-8b-awq` |
-| Supplier credential | API key, held only in a future platform server-side vault |
 
-The current website stores configuration only and runs simulated checks. It does not connect to this endpoint or have a credential vault. Real launch eligibility also needs model/revision verification, measured capacity, ongoing monitoring and a request ledger; neither a configured URL nor PRL alone proves GPU ownership.
+The bundle contains `frpc.toml`, `ca.crt` and `token`. It identifies your provider, pins the FRPS server certificate and authorizes only your assigned hostname. Use the operator-issued values; the example domains in this guide are placeholders.
 
-## 4. Troubleshooting
+Keep the bundle private. It does not include your vLLM inference API key, and you should never receive the central server’s private key or another provider’s credentials.
+
+## 2. Prepare your GPU machine
+
+Use Linux x86_64 with a supported NVIDIA GPU, NVIDIA drivers, Docker Engine, Compose v2, NVIDIA Container Toolkit and Python 3. Start with 16GB+ VRAM as a conservative demo target; actual requirements depend on context and concurrency. Apple GPU acceleration is not supported by this Docker kit.
+
+```bash
+git clone https://github.com/xgaozoyoe/cc-launchpad-router.git
+cd cc-launchpad-router
+python3 scripts/setup.py
+mkdir -p .secrets/frp-provider
+chmod 700 .secrets .secrets/frp-provider
+```
+
+The setup script generates your inference API key in `.env` without printing it. Copy the three files from your issued bundle into `.secrets/frp-provider/`, then restrict their permissions:
+
+```bash
+chmod 600 .secrets/frp-provider/frpc.toml .secrets/frp-provider/ca.crt .secrets/frp-provider/token
+```
+
+Do not commit `.env` or `.secrets/`, or paste their contents into the website demo.
+
+## 3. Start the model and FRPC connector
+
+```bash
+docker compose -f compose.yaml -f compose.frpc.yaml up --build -d
+docker compose -f compose.yaml -f compose.frpc.yaml logs -f inference frpc
+```
+
+The first startup downloads the model. Once vLLM passes its health check, frpc connects outward to the central server on TCP 7000. It verifies the server certificate and forwards requests to `inference:8000` on the Docker network.
+
+Keep `localIP = "inference"` in the issued configuration. `localhost` inside the frpc container refers to that container, not to vLLM.
+
+## 4. Test the local and public REST APIs
+
+In another terminal in the same repository folder:
+
+```bash
+python3 scripts/smoke.py
+python3 scripts/smoke.py --base-url https://gpu-001.compute.example.com/v1
+```
+
+Replace the public hostname with your actual assigned URL. The tests read your inference key from `.env` and check authentication, model discovery, real generation, token usage and SSE streaming.
+
+| Access | URL |
+| --- | --- |
+| Local debugging on the GPU machine | `http://127.0.0.1:8000/v1` |
+| Platform and remote API access | `https://<provider-id>.<platform-domain>/v1` |
+
+Both use `Authorization: Bearer <INFERENCE_API_KEY>`. The public entry forwards `GET /v1/models` and `POST /v1/chat/completions`; the local `/health` probe is not exposed. See the [README REST API examples](../README.md#rest-api) for request and response formats.
+
+Your GPU machine and containers must remain running while serving credits. Stop them with `docker compose -f compose.yaml -f compose.frpc.yaml down`; stopping the tunnel makes the assigned API unavailable.
+
+## 5. Register and verify capacity before launching credits
+
+The operator’s private registry records the provider ID, exact model/revision, quantization, context and assigned API URL. Operators can list entries with `python3 scripts/frp_admin.py list` or query the private `/providers` endpoint on the central host.
+
+Registration has status **registered-unverified**. A working FRP tunnel proves connectivity, not available GPU capacity. The platform must separately verify the model, measure throughput/latency, reserve capacity and monitor availability before real credit issuance. Supplier inference keys belong in a platform server-side vault.
+
+The current website uses simulated setup and inference and is not synchronized with this registry yet. This documentation does not deploy a central server or enable real credit issuance.
+
+## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| Container exits before model loading | NVIDIA runtime / drivers, API key, logs |
-| GPU out of memory | Lower context and concurrency; actual VRAM exceeds weight-file size |
-| Local API works, remote URL fails | DNS, firewall, certificate, proxy or tunnel status |
-| Tunnel returns 502 | Service must be `inference:8000` on the same Docker network |
-| 401 / 403 on API | Bearer key must match the GPU host's `.env` |
-| Model not found | Use `qwen3-8b-awq`, not the Hugging Face repository name |
-| Streaming fails but normal requests work | Avoid Quick Tunnel; check buffering and timeout rules |
-| Container stays unhealthy | First download may be slow; inspect inference logs. Health readiness is not proof of service capacity |
+| Model does not load | NVIDIA runtime/drivers, free VRAM and inference logs |
+| FRPC never starts | It waits for inference health; the initial model download can take time |
+| Connection refused / timeout | Issued server address, outbound TCP 7000 and central FRPS availability |
+| TLS verification fails | Correct issued CA certificate and server name; contact the operator rather than disabling verification |
+| Provider or route not authorized | Correct private bundle, enabled provider record and assigned hostname; do not edit provider ID/subdomain independently |
+| Local API works but public API fails | FRPC logs, central DNS/HTTPS and provider route registration |
+| API returns 401 | Inference API key must match the provider’s `.env`; the FRP token is a separate credential |
+| Model not found | Request `qwen3-8b-awq`, matching `/v1/models` |
 
-## References
+## Further documentation
 
-- [Qwen vLLM deployment](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)
-- [Caddy HTTPS reverse proxy](https://caddyserver.com/docs/quick-starts/reverse-proxy)
-- [Named Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/get-started/)
-- [Cloudflare tunnel run options](https://developers.cloudflare.com/tunnel/reference/run-parameters/)
-- [Quick Tunnel limitations](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+- [Central FRPS deployment, provisioning, registry, monitoring and revocation](FRP-HOSTING.md)
+- [Standalone hosting alternatives](STANDALONE-HOSTING.md) — for services outside the platform-managed FRP flow
+- [NVIDIA Container Toolkit installation](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
