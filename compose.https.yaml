@@ -1,0 +1,21 @@
+# Use with: docker compose -f compose.yaml -f compose.https.yaml up --build -d
+services:
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      INFERENCE_DOMAIN: ${INFERENCE_DOMAIN:?Set your API hostname in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?Set your certificate contact email in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      inference:
+        condition: service_healthy
+volumes:
+  caddy-data:
+  caddy-config:

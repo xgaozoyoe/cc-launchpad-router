@@ -1,0 +1,4 @@
+*
+!scripts/
+!scripts/serve.py
+!scripts/healthcheck.py

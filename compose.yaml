@@ -1,0 +1,36 @@
+services:
+  inference:
+    build: .
+    image: launchpad/qwen3-awq-demo:local
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8000}:8000"
+    environment:
+      INFERENCE_API_KEY: ${INFERENCE_API_KEY:?Run python3 scripts/setup.py first}
+      MODEL_ID: Qwen/Qwen3-8B-AWQ
+      MODEL_REVISION: 93eb32ea9ef98cc266b85563ad0dd29e5f2940b9
+      SERVED_MODEL_NAME: qwen3-8b-awq
+      MAX_MODEL_LEN: ${MAX_MODEL_LEN:-4096}
+      MAX_NUM_SEQS: ${MAX_NUM_SEQS:-2}
+      GPU_MEMORY_UTILIZATION: ${GPU_MEMORY_UTILIZATION:-0.85}
+      VLLM_NO_USAGE_STATS: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    volumes:
+      - model-cache:/root/.cache/huggingface
+    shm_size: 8gb
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "/opt/launchpad/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30m
+      retries: 5
+volumes:
+  model-cache:
