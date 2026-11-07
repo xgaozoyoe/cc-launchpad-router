@@ -122,3 +122,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified official matching binaries. Keep `.env` and `.secrets/` out of Git.
+
+## Rust central backend
+
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. It has not replaced the existing Python FRP/stake services or been deployed to a public server. Sales remain disabled in this service until wallet, stake-event and Launch ID issuance integration is complete.

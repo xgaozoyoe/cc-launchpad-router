@@ -2,3 +2,8 @@
 !scripts/
 !scripts/serve.py
 !scripts/healthcheck.py
+!central/
+!central/Cargo.toml
+!central/Cargo.lock
+!central/src/
+!central/src/**

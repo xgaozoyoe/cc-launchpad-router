@@ -1,0 +1,18 @@
+# Connect an authenticated MongoDB replica set or Atlas using .secrets/central.env.
+services:
+  central:
+    build:
+      context: ..
+      dockerfile: central/Dockerfile
+    restart: unless-stopped
+    env_file: ../.secrets/central.env
+    environment:
+      CENTRAL_HMAC_KEY_FILE: /run/secrets/backend-hmac.key
+      BIND_ADDRESS: 0.0.0.0:9001
+    volumes:
+      - ../.secrets/backend-hmac.key:/run/secrets/backend-hmac.key:ro
+    ports:
+      - "127.0.0.1:9001:9001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

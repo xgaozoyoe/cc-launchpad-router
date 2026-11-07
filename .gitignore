@@ -7,3 +7,5 @@ contracts/out/
 contracts/cache/
 *.sqlite*
 contracts/broadcast/
+
+central/target/
