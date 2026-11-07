@@ -1,0 +1,27 @@
+import { useEffect, useRef, useState } from 'react';
+import type { ComponentProps, FormEvent } from 'react';
+import { ProjectLaunch } from './ProjectLaunch';
+import { Modal } from './UI';
+type Project={_id:string;name:string;model_id:string;status:string};
+type Model={id:string;model:string};
+async function api<T>(path:string,options?:RequestInit):Promise<T>{
+ const response=await fetch('/api/central/'+path,{...options,credentials:'same-origin',cache:'no-store'});
+ const data=await response.json() as T&{error?:string};
+ if(!response.ok)throw new Error(data.error??'The backend request failed.');return data;
+}
+function ServerProjects({onClose}:{onClose:()=>void}){
+ const [projects,setProjects]=useState<Project[]>([]),[models,setModels]=useState<Model[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[selected,setSelected]=useState<Project|null>(null);
+ const requestId=useRef(crypto.randomUUID());
+ useEffect(()=>{let active=true;void Promise.all([api<{projects:Project[]}>('projects'),api<{models:Model[]}>('models')]).then(([p,m])=>{if(active){setProjects(p.projects);setModels(m.models);}}).catch(e=>{if(active)setError(String(e.message));});return()=>{active=false;};},[]);
+ async function create(event:FormEvent<HTMLFormElement>){event.preventDefault();const f=new FormData(event.currentTarget);setBusy(true);setError('');try{
+  const result=await api<{project:Project}>('projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:String(f.get('name')),model_id:String(f.get('model')),request_id:requestId.current})});
+  setSelected(result.project);setProjects(previous=>[result.project,...previous.filter(p=>p._id!==result.project._id)]);requestId.current=crypto.randomUUID();
+ }catch(e){setError(e instanceof Error?e.message:'Could not create project.');}finally{setBusy(false);}}
+ return <Modal title="Your server projects" onClose={onClose}><div className="setup-note"><strong>Connected to central backend · MongoDB storage</strong><p>Project drafts are saved to your account on the server. Stake verification and credit sales are not connected yet.</p></div>{error?<p className="error" role="alert">{error}</p>:null}{selected?<><h3>{selected.name}</h3><dl className="resource-review"><dt>Project ID</dt><dd style={{overflowWrap:'anywhere'}}>{selected._id}</dd><dt>Model</dt><dd>{selected.model_id}</dd><dt>Status</dt><dd>{selected.status}</dd><dt>Launch ID</dt><dd>Pending verified stake integration</dd></dl><button className="outline-button full-width" onClick={()=>setSelected(null)}>Back to projects</button></>:<><form onSubmit={e=>void create(e)}><div className="form-field"><label htmlFor="server-project-name">Project name</label><input id="server-project-name" name="name" maxLength={100} required defaultValue="My Qwen Credits"/></div><div className="form-field"><label htmlFor="server-project-model">Supported model</label><select id="server-project-model" name="model" required>{models.map(m=><option key={m.id} value={m.id}>{m.model}</option>)}</select></div><button className="primary-button full-width" disabled={busy||!models.length}>{busy?'Saving to server…':'Save project to server'}</button></form><section className="section-gap"><h3>Saved projects</h3>{projects.length?projects.map(p=><button className="outline-button full-width" style={{marginTop:10}} key={p._id} onClick={()=>setSelected(p)}>{p.name} · {p.status}</button>):<p>No saved projects yet.</p>}</section></>}</Modal>;
+}
+export function ConnectedProjectLaunch(props:ComponentProps<typeof ProjectLaunch>){
+ const [connected,setConnected]=useState<boolean|null>(null);
+ useEffect(()=>{let active=true;void fetch('/api/runtime',{cache:'no-store'}).then(async r=>r.ok&&(r.headers.get('content-type')??'').includes('application/json')?(await r.json() as {integrated?:boolean}).integrated===true:false).then(v=>{if(active)setConnected(v);}).catch(()=>{if(active)setConnected(false);});return()=>{active=false;};},[]);
+ if(connected===null)return <Modal title="Connecting to workspace" onClose={props.onClose}><p>Checking project storage…</p></Modal>;
+ return connected?<ServerProjects onClose={props.onClose}/>:<ProjectLaunch {...props}/>;
+}

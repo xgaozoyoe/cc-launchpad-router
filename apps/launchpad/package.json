@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/state.test.ts server/auth.test.ts",
+    "test": "node --experimental-strip-types --test src/state.test.ts server/auth.test.ts server/central.test.ts",
     "build": "tsc --noEmit && npm run check:server && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "check:server": "tsc -p tsconfig.server.json && node scripts/verify-server.mjs"

@@ -1,4 +1,4 @@
-import { ProjectLaunch } from './components/ProjectLaunch';
+import { ConnectedProjectLaunch as ProjectLaunch } from './components/ConnectedProjectLaunch';
 import { ComputeResources, ResourceSetup } from './components/ComputeResources';
 import { loadResources } from './resources';
 import type { ComputeResource } from './resources';

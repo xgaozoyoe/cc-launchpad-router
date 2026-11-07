@@ -1,6 +1,6 @@
 # Rust central service
 
-The central backend now starts with **Rust, Axum, Tokio and MongoDB**. This is a draft-project API foundation, not a deployed replacement for the existing Python stake monitor/FRP services. It does not issue Launch IDs, accept stakes, authorize FRPC, sell credits, or route paid inference yet. Those endpoints are intentionally absent. `status` reports these integration gaps explicitly.
+The central backend now starts with **Rust, Axum, Tokio and MongoDB**. Use `python3 scripts/stack.py local` from the repository root to run it with the React UI and a local MongoDB replica set. This is a draft-project API foundation, not a deployed replacement for the existing Python stake monitor/FRP services. It does not issue Launch IDs, accept stakes, authorize FRPC, sell credits, or route paid inference yet. Those endpoints are intentionally absent. `status` reports these integration gaps explicitly.
 
 ## Run
 
@@ -24,7 +24,7 @@ For native development, export `MONGODB_URI`, optionally `MONGODB_DATABASE`, and
 cargo +stable run --manifest-path central/Cargo.toml
 ```
 
-The default listener is `127.0.0.1:9001`. Put HTTPS and request rate limits in front of it before remote access. The key is server-only: the browser must never receive it. Vercel must validate the Google session and sign requests using the verified session's user ID. That Vercel bridge is not wired yet.
+The default listener is `127.0.0.1:9001`. Put HTTPS and request rate limits in front of it before remote access. The key is server-only: the browser must never receive it. Vercel must validate the Google session and sign requests using the verified session's user ID. The integrated single-host session gateway is now available in `apps/launchpad/server/central.ts`; see `deploy/stack/README.md`. The Vercel deployment continues to use its existing demo flow.
 
 ## API and signing
 

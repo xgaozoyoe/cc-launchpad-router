@@ -1,0 +1,4 @@
+{$APP_ORIGIN} {
+    encode zstd gzip
+    reverse_proxy web:4173
+}

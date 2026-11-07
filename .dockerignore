@@ -7,3 +7,11 @@
 !central/Cargo.lock
 !central/src/
 !central/src/**
+!apps/
+!apps/launchpad/
+!apps/launchpad/**
+apps/launchpad/node_modules
+apps/launchpad/dist
+apps/launchpad/.server-check
+apps/launchpad/.env*
+apps/launchpad/.vercel

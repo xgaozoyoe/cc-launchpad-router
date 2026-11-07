@@ -1,0 +1,78 @@
+services:
+  keys:
+    image: alpine:3.21
+    user: root
+    command: [sh, -ec, 'cp /bootstrap/backend-hmac.key /keys/backend-hmac.key; chown 10001:10001 /keys/backend-hmac.key; chmod 400 /keys/backend-hmac.key']
+    volumes:
+      - ../../.secrets/stack:/bootstrap:ro
+      - signing-key:/keys
+  mongo:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?run stack setup}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?run stack setup}
+    entrypoint: [sh, /run/setup/mongo-entrypoint.sh]
+    volumes:
+      - ../../.secrets/stack:/run/bootstrap:ro
+      - ./mongo-entrypoint.sh:/run/setup/mongo-entrypoint.sh:ro
+      - ./mongo-health.js:/run/setup/mongo-health.js:ro
+      - mongo-data:/data/db
+    healthcheck:
+      test: [CMD, mongosh, --nodb, --quiet, /run/setup/mongo-health.js]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  mongo-init:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
+    command: [mongosh, --nodb, --quiet, /run/setup/mongo-init.js]
+    volumes:
+      - ./mongo-init.js:/run/setup/mongo-init.js:ro
+    depends_on:
+      mongo: {condition: service_healthy}
+  central:
+    build: {context: ../.., dockerfile: central/Dockerfile}
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: ${MONGODB_URI}
+      MONGODB_DATABASE: launchpad
+      CENTRAL_HMAC_KEY_FILE: /run/keys/backend-hmac.key
+    volumes: ["signing-key:/run/keys:ro"]
+    depends_on:
+      mongo-init: {condition: service_completed_successfully}
+      keys: {condition: service_completed_successfully}
+  web:
+    build: {context: ../.., dockerfile: deploy/stack/web.Dockerfile}
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_ACCESS_MODE: ${AUTH_ACCESS_MODE:-public}
+      AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?set Google client ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?set Google client secret}
+      CENTRAL_API_ORIGIN: http://central:9001
+      CENTRAL_HMAC_KEY_FILE: /run/keys/backend-hmac.key
+    volumes: ["signing-key:/run/keys:ro"]
+    depends_on:
+      central: {condition: service_started}
+  https:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [web]
+volumes:
+  mongo-data:
+  signing-key:
+  caddy-data:
+  caddy-config:

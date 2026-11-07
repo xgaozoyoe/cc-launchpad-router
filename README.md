@@ -126,3 +126,11 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 ## Rust central backend
 
 The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. It has not replaced the existing Python FRP/stake services or been deployed to a public server. Sales remain disabled in this service until wallet, stake-event and Launch ID issuance integration is complete.
+
+## Run the integrated workspace
+
+```sh
+python3 scripts/stack.py local
+```
+
+Open http://localhost:4174. The project dialog now saves drafts through the same-origin session gateway to Rust + MongoDB. [Single-host deployment and local testing](deploy/stack/README.md) includes Docker Compose, Google callback setup and the current integration scope.
