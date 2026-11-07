@@ -16,3 +16,15 @@ export function filterLaunches(projects:ServerProject[],group:LaunchGroup,query:
  return projects.filter(p=>(group==='all'||launchGroup(p.status)===group)&&(!term||[p.name,p.model_id,p._id,p.launch_id,p.provider_id,p.wallet_address].some(value=>value?.toLowerCase().includes(term))));
 }
 export function stakeUnits(raw?:string){if(!raw)return 'Not committed';try{return (BigInt(raw)/10n**18n).toLocaleString()+' tPRL';}catch{return 'Unavailable';}}
+
+// Current escrow transfers the whole stake on refund/release. It has no
+// partial unlock ledger, so never infer a withdrawable balance from usage.
+export function stakeBalances(project:ServerProject){
+ if(!project.stake_finalized||!project.stake_raw)return null;
+ try{
+  const total=BigInt(project.stake_raw);
+  if(total<0n)return null;
+  const returned=['released','refunded'].includes(project.status);
+  return {locked:returned?0n:total,free:0n,returned:returned?total:0n};
+ }catch{return null;}
+}
