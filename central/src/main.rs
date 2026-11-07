@@ -1,4 +1,5 @@
 mod auth;
+mod deployment;
 mod stake;
 use axum::{
     body::Bytes,
@@ -124,6 +125,11 @@ async fn dispatch(
     let owners = account_ids(&app, &identity.user)
         .await
         .map_err(unavailable)?;
+    if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
+        if let Some((id, action)) = rest.split_once("/deployment") {
+            return deployment::handle(&app, owners, id, action, method.as_str()).await;
+        }
+    }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
         if let Some((id, action)) = rest.split_once("/stake") {
             if uuid::Uuid::parse_str(id).is_err()
@@ -340,6 +346,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(stake::run(app.clone()));
     let routes = Router::new()
         .route("/healthz", get(health))
+        .route(
+            "/internal/frp/handler",
+            axum::routing::post(deployment::hook),
+        )
         .route("/api/v1/{*path}", get(api).post(api))
         .layer(axum::extract::DefaultBodyLimit::max(65536))
         .layer(axum::middleware::from_fn(

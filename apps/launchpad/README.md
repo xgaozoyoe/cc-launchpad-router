@@ -8,7 +8,7 @@ The React 19 + TypeScript + Vite application used by the Launchpad demo, with Au
 - Supported models and provider offers, filtered by model and sorted by price.
 - Model/launch-specific credit balances and simulated inference receipts.
 - My launches: account-owned server projects, stage filters, search, resume staking, Launch IDs, stake transactions and block-based RPC deadlines.
-- Project-specific provider setup guide: assigned IDs/deadline, local API checks, FRPC bundle requirements and native connector commands, downloadable public checklist, and saved-state refresh. Private bundle download, tunnel monitoring and RPC verification are explicitly unavailable until backend integration.
+- Project-specific provider setup guide: assigned IDs/deadline, local API checks, FRPC bundle requirements and native connector commands, downloadable public checklist, and saved-state refresh. Owner-only Linux FRPC bundles and historical login/proxy observations are integrated; live heartbeat and RPC acceptance remain unavailable.
 - PRL collateral display in project cards/details: locked, free/withdrawable and returned. Partial unlocking is not implemented.
 - Compute-resource setup wizard, Docker download and endpoint configuration.
 - Simulated PRL wallet and public compute pool.
@@ -62,7 +62,7 @@ The active integrated deployment is the native Ubuntu stack at https://riddle.xy
 
 In the integrated workspace, Create project saves an account-owned MongoDB draft. Wallet binding, server registration, provider approve/stake transactions and finalized Sepolia event processing reserve the Launch ID. My launches displays these records and returns from project details to the dashboard. The old `#supplier` URL resolves to My launches.
 
-The active flow stops at `awaiting-rpc`. Private FRPC bundles, RPC/model/capacity acceptance, credit sales, a buyer ledger, metering/burning and settlement are not connected. Resource records and buyer/PRL wallet/pool balances remain browser-local simulations. The separate Python FRP registry is not automatically synchronized with Rust/MongoDB. See [implementation status](../../docs/IMPLEMENTATION-STATUS.md).
+The active flow stops at `awaiting-rpc`. RPC/model/capacity acceptance, credit sales, a buyer ledger, metering/burning and settlement are not connected. Resource records and buyer/PRL wallet/pool balances remain browser-local simulations. The separate Python FRP registry is not automatically synchronized with Rust/MongoDB. See [implementation status](../../docs/IMPLEMENTATION-STATUS.md).
 
 The current escrow has no partial unlock ledger. Free/withdrawable is therefore zero for a recorded stake; a full release/refund transfers the entire amount directly back to the wallet. Draft/unconfirmed collateral is shown as unknown, not a confirmed deposit. The agreed proportional-release rule is a future contract/settlement change.
 

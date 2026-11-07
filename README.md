@@ -45,7 +45,7 @@ The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-
 
 **[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID → provision project credential (pending integration) → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Private bundle download APIs and real RPC acceptance remain pending; wallet binding and staking are connected. The older Python monitor uses SQLite and remains a separate reference implementation.
+The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Owner-only Linux FRPC bundles are connected; real RPC acceptance remains pending. See [provider bundles](docs/PROVIDER-BUNDLES.md). The older Python monitor uses SQLite and remains a separate reference implementation.
 
 ## Quick start: computing provider
 

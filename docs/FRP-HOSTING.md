@@ -1,6 +1,6 @@
 # Central FRPS and unified launch-ID router
 
-> Separate reference stack, not the active Rust/MongoDB deployment. Read [implementation status](IMPLEMENTATION-STATUS.md). Publishing workflow target: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; The active Rust worker reserves the Launch ID after finalized stake acceptance; private credential delivery is not integrated. Complete RPC acceptance within 24h of the stake block. Manual `frp_admin.py add` / `launch` commands are disabled; they are not production onboarding steps.
+> Separate reference stack, not the active Rust/MongoDB deployment. Read [implementation status](IMPLEMENTATION-STATUS.md). Publishing workflow target: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; The active Rust worker reserves the Launch ID after finalized stake acceptance; native Rust credential delivery is available via the authenticated [provider bundle download](PROVIDER-BUNDLES.md). Complete RPC acceptance within 24h of the stake block. Manual `frp_admin.py add` / `launch` commands are disabled; they are not production onboarding steps.
 
 FRPC is required for every provider. The platform owns the public API hostname and resolves each **launch ID** to an assigned provider’s FRPC tunnel and exact model profile.
 

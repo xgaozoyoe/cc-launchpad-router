@@ -1,6 +1,6 @@
 # Required hosting flow: local inference → FRPC → platform FRPS
 
-> This is the supplier transport guide. Production credential delivery and RPC acceptance are not connected yet; see [implementation status](IMPLEMENTATION-STATUS.md). Publishing workflow target: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; The Launch ID is reserved after finalized stake acceptance. Private deployment credential issuance remains unconnected in the active Rust service. Complete RPC acceptance within 24h of the stake block. Manual `frp_admin.py add` / `launch` commands are disabled.
+> This is the supplier transport guide. Production credential delivery and RPC acceptance are not connected yet; see [implementation status](IMPLEMENTATION-STATUS.md). Publishing workflow target: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; The Launch ID is reserved after finalized stake acceptance. Native Linux bundles are available in the active app; see [provider bundles](PROVIDER-BUNDLES.md). Complete RPC acceptance within 24h of the stake block. Manual `frp_admin.py add` / `launch` commands are disabled.
 
 **Every computing provider must connect through FRPC to the platform’s FRPS server.** The platform exposes one unified HTTPS API hostname. Each credit launch has its own unique **launch ID**, used to route requests to the correct provider and model.
 
@@ -33,7 +33,7 @@ The generic transport registry can support multiple launches per tunnel. The act
 
 ## 1. Receive your platform-issued FRPC bundle
 
-After finalized stake, My launches shows your assigned Launch ID and stake-hash Provider ID. The following steps require a private bundle which the active app cannot yet issue. The intended bundle contains `frpc.toml`, `ca.crt` and `token`. It authorizes your tunnel and verifies the central server’s certificate. Use that bundle without changing the provider identity or assigned internal route.
+After finalized stake, My launches shows your assigned Launch ID and stake-hash Provider ID. The following Docker reference steps require a Docker profile; the active app issues a native Linux bundle described in [provider bundles](PROVIDER-BUNDLES.md). The intended bundle contains `frpc.toml`, `ca.crt` and `token`. It authorizes your tunnel and verifies the central server’s certificate. Use that bundle without changing the provider identity or assigned internal route.
 
 Providers do not need their own public domain, public IP, HTTPS proxy or inbound router port forwarding. Outbound TCP access to the platform FRPS control port (default 7000) is required.
 

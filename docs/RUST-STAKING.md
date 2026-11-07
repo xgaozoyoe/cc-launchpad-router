@@ -58,7 +58,7 @@ npm --prefix apps/launchpad run build
 
 The operator's `deploy/remote/test-sepolia-stake.py --account <verified application ID> --wait 1200` uses the dedicated funded Sepolia test wallet. It saves resumable state privately and a public test report only after finalization. Re-running after a recorded stake only waits/checks; an interrupted send without a recorded receipt requires manual inspection before another transaction.
 
-EOA signatures are supported; EIP-1271 smart-contract wallets are not yet supported. Test tPRL must be issued by its administrator, and provider wallets need their own Sepolia ETH for gas. This release does not automate test-token faucets, FRPC credentials, RPC acceptance, credit settlement, slashing or production PRL transfers. All purchases/balances outside server projects remain concept simulations.
+EOA signatures are supported; EIP-1271 smart-contract wallets are not yet supported. Test tPRL must be issued by its administrator, and provider wallets need their own Sepolia ETH for gas. This release does not automate test-token faucets, RPC acceptance, credit settlement, slashing or production PRL transfers. All purchases/balances outside server projects remain concept simulations.
 
 ## Login identity persistence
 
@@ -75,3 +75,7 @@ That link endpoint requires the server HMAC and is deliberately absent from the 
 My launches shows real account project records and separates locked, free/withdrawable and returned collateral. The current contract has no partial unlock ledger: finalized active/expired deposits remain locked until a full refund or release, which transfers the entire stake to the wallet. The UI therefore reports free as zero, not an amount inferred from simulated credits. Unconfirmed deposits are not counted as confirmed locked collateral.
 
 The agreed future proportional-release rule and its accounting boundaries are documented in [the lifecycle](PROJECT-LIFECYCLE.md#collateral-after-delivery). No metering, settlement ingestion, free-balance withdrawal endpoint or progressive-release event indexing exists in this service yet.
+
+## Provider bundles
+
+Owner-only Linux FRPC archives and project-bound FRPS Login/NewProxy checks are implemented in `central/src/deployment.rs`. See [provider bundles](PROVIDER-BUNDLES.md) for configuration, credentials, TLS, identity/route restrictions and remaining acceptance limits.

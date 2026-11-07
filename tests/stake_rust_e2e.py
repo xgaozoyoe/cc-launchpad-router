@@ -76,6 +76,9 @@ def run():
    config={'chain_id':31337,'staking_contract':escrow,'token_address':token,'deployment_block':int(token_receipt['blockNumber'],16)}
    (tmp/'chain.json').write_text(json.dumps(config))
    env.update(MONGODB_URI=f'mongodb://launchpad:{app_pw}@127.0.0.1:{mongo_port}/launchpad?replicaSet=rs0&authSource=launchpad',CENTRAL_HMAC_KEY_FILE=str(tmp/'hmac'),BIND_ADDRESS=f'127.0.0.1:{api_port}',CHAIN_CONFIG_FILE=str(tmp/'chain.json'),CHAIN_RPC_URL=rpc_url,CHAIN_ALLOW_LOCAL='1',APP_ORIGIN='http://localhost:4174',STAKE_CAST=str(FOUNDRY/'cast'),STAKE_KEYSTORE=str(tmp/'operator.json'),STAKE_PASSWORD_FILE=str(tmp/'password'))
+   (tmp/'frpc').write_bytes(b'test-binary');(tmp/'ca').write_text('test-cert');(tmp/'transport').write_text('transport-key');(tmp/'license').write_text('license')
+   bundle_config={'python':os.environ.get('BUNDLE_PYTHON','python3'),'helper':str(ROOT/'scripts/provider_bundle.py'),'server_addr':'127.0.0.1','server_port':7000,'tls_server_name':'localhost','frpc_binary':str(tmp/'frpc'),'frpc_sha256':hashlib.sha256(b'test-binary').hexdigest(),'ca_file':str(tmp/'ca'),'transport_token_file':str(tmp/'transport'),'license_file':str(tmp/'license'),'credential_dir':str(tmp/'credentials')}
+   (tmp/'bundles.json').write_text(json.dumps(bundle_config));env['PROVIDER_BUNDLE_CONFIG']=str(tmp/'bundles.json')
    backend=start([str(BIN/'cc-central')],env)
    wait(lambda:urllib.request.urlopen(api_url+'/healthz',timeout=1).status==200)
    legacy=str(uuid.uuid4())
@@ -107,11 +110,25 @@ def run():
    issued=wait(lambda:get_status('awaiting-rpc'),90)
    stake_block=rpc('eth_getBlockByNumber',[stake_receipt['blockNumber'],False]);at=int(stake_block['timestamp'],16)
    assert issued['provider_id']==tx_hash and issued['staked_at']==at and issued['rpc_deadline']==at+86400 and issued['stake_finalized'] is True
+   import io,tarfile
+   api('POST',path+'/deployment/bundle',{},user='bob',expected=404)
+   bundle=api('POST',path+'/deployment/bundle',{})
+   with tarfile.open(fileobj=io.BytesIO(base64.b64decode(bundle['bundle_base64'])),mode='r:gz') as archive:
+    credential=archive.extractfile('provider-'+issued['launch_id']+'/private/token').read().decode()
+   assert api('GET',path+'/deployment')['issued'] is True
+   assert 'credential' not in str(api('GET',path))
+   def hook(content):
+    request=urllib.request.Request(api_url+'/internal/frp/handler?op=Login',data=json.dumps({'content':content}).encode(),headers={'Content-Type':'application/json'})
+    return json.load(urllib.request.urlopen(request))
+   login={'user':issued['provider_id'],'metas':{'provider_token':credential}}
+   assert hook(login)['reject'] is False
+   assert hook({'user':issued['provider_id'],'metas':{'provider_token':'wrong'}})['reject'] is True
    saved=issued['launch_id'];time.sleep(11);assert api('GET',path)['project']['launch_id']==saved
    # Contract expiry/refund disables the project without deleting its historic identity.
    rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
    send(provider.address,escrow,'0x'+selector('refundExpired(bytes32)')+registered['onchain_key'][2:])
    refunded=wait(lambda:get_status('refunded'),60);assert refunded['launch_id']==saved
+   api('POST',path+'/deployment/bundle',{},expected=409);assert hook(login)['reject'] is True
    # A stake refunded before event finality must not poison the global cursor.
    second=api('POST','/api/v1/projects',{'name':'Refund before finality','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project']
    second_path='/api/v1/projects/'+second['_id']

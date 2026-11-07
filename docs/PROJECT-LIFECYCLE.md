@@ -14,7 +14,7 @@ My launches lists the owner's server projects, supports stage filters/search and
 
 ## Remaining publishing work
 
-Private project deployment credentials and owner-only downloads, FRPC/FRPS authorization synchronized with MongoDB, real RPC/model/usage/capacity checks and sale activation are not integrated. No live sales can be opened through the current Rust API. The target is mandatory FRPC, then successful acceptance within the original 24h window, then sales on the same Launch ID.
+Private project deployment credentials, owner-only Linux bundles and FRPS authorization against MongoDB/chain state are integrated in [provider bundles](PROVIDER-BUNDLES.md). Real RPC/model/usage/capacity acceptance and sale activation remain unintegrated. No live sales can be opened through the current Rust API. The target is mandatory FRPC, then successful acceptance within the original 24h window, then sales on the same Launch ID.
 
 The contract includes trusted `verifyProject` and full settlement/refund operations; their presence does not mean the application has automated them. A provider may call `refundExpired` for an unverified expired stake. Expiry alone does not transfer funds or slash collateral.
 

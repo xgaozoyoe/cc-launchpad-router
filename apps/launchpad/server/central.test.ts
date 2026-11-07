@@ -39,3 +39,14 @@ test('stake routes preserve signing path and cannot bypass server verification',
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects/'+id+'/stake/prepare'),env,fetch,session)).status,405);
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects/'+id+'/stake/verify-rpc',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,fetch,session)).status,404);
 });
+
+test('bundle download requires session and same-origin POST; streams only a private attachment',async()=>{
+ const path='/api/central/projects/11111111-1111-4111-8111-111111111111/deployment/bundle';
+ const req=(origin=env.APP_ORIGIN)=>new Request(env.APP_ORIGIN+path,{method:'POST',headers:{origin},body:'{}'});
+ const filename='provider-launch-11111111-1111-4111-8111-111111111111-linux-amd64.tar.gz';
+ const fetcher:typeof fetch=async()=>Response.json({filename,bundle_base64:Buffer.from('archive-bytes').toString('base64')});
+ assert.equal((await centralProxy(req(),env,fetcher,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req('https://attacker.example'),env,fetcher,session)).status,403);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+path),env,fetcher,session)).status,405);
+ const r=await centralProxy(req(),env,fetcher,session);assert.equal(r.headers.get('content-type'),'application/gzip');assert.equal(r.headers.get('cache-control'),'no-store, private');assert.match(r.headers.get('content-disposition')??'',/attachment/);assert.equal(await r.text(),'archive-bytes');
+});

@@ -34,7 +34,7 @@ Before replacing binaries, stop the managed supervisor and wait for its children
 
 The bootstrap binary requires `MONGO_PORT`, `MONGO_ROOT_PASSWORD` and `MONGO_APP_PASSWORD` from the private configuration. It initializes only a loopback connection, uses MongoDB's localhost exception to create the first administrator on a fresh authenticated instance, and then creates the `launchpad` application user using authenticated administrator access. Repeating it does not overwrite existing users or passwords.
 
-The deployment now supports drafts, project-bound wallet verification, chain registration and finalized stake-to-Launch-ID issuance. FRP authorization, RPC acceptance and credit sales remain unconnected. The separate Vercel demo and local configuration are not changed by this backend deployment. A Vercel connection still needs a reachable HTTPS origin and its server-only signing key; a Tailscale-only address is reachable only by tailnet members.
+The deployment now supports drafts, project-bound wallet verification, chain registration and finalized stake-to-Launch-ID issuance. Project-bound FRP authorization and private bundle download are connected; RPC acceptance and credit sales remain unconnected. The separate Vercel demo and local configuration are not changed by this backend deployment. A Vercel connection still needs a reachable HTTPS origin and its server-only signing key; a Tailscale-only address is reachable only by tailnet members.
 
 Verified on Ubuntu: signed status, rejection of nonce replay, draft persistence, idempotent creation, cross-account 404, repeatable database initialization, and supervisor recovery after terminating the backend process. A host reboot was not performed.
 
@@ -48,10 +48,14 @@ Register `https://riddle.xyz/api/auth/callback/google` in the existing Google OA
 
 ## Active staking worker
 
-The Rust process now verifies project-bound wallet signatures, registers prepared projects using the dedicated Sepolia operator keystore and indexes finalized stake events into MongoDB. See [the staking integration guide](../../docs/RUST-STAKING.md). New Launch IDs remain `awaiting-rpc`; no credit sales or provider credential bundles are activated yet.
+The Rust process now verifies project-bound wallet signatures, registers prepared projects using the dedicated Sepolia operator keystore and indexes finalized stake events into MongoDB. See [the staking integration guide](../../docs/RUST-STAKING.md). New Launch IDs remain `awaiting-rpc`; private provider bundles are available after eligibility checks; credit sales remain closed.
 
 ## UI-only updates
 
 The gateway serves React assets from `web/dist`. For a frontend-only release, build and store the artifact inside the project root, copy new assets while retaining previous hashed assets, then atomically replace `index.html` last. Record the source revision in `DEPLOYED_REVISION`. No backend/database restart is needed for static-only changes. This does not update Node authentication code, backend binaries or private environment configuration.
 
 My launches displays account-owned projects and current collateral balances. The test deployment stops at awaiting RPC; no FRPS inference endpoint, buyer sales or progressive collateral release has been activated.
+
+## Existing FRPS integration
+
+[Provider bundle operations](../../docs/PROVIDER-BUNDLES.md) describe the reused dedicated port7000, project-local TLS/configuration, optional supervisor child and owner-only downloads. Original `/home/xgao/frp/frps.toml` is preserved; the active configuration is `private/frps.toml` under this project. No separate FRPS endpoint is created.

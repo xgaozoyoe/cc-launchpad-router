@@ -15,13 +15,13 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Event monitor | Rust worker reads finalized logs, verifies evidence, atomically reserves IDs, checkpoints and halts on finalized-checkpoint changes |
 | 24h window | Stake block timestamp + 86400; confirmation consumes part of the window; expiry uses chain time |
 | Launch ID | Issued after accepted finalized stake; not permission to sell |
-| Provider setup guide | Opens from My launches; project-bound instructions/checklist and saved status refresh. No secret download, tunnel telemetry or Test RPC service |
+| Provider setup guide | Opens from My launches; project-bound instructions/checklist and saved status refresh. Owner-only Linux FRPC archive download; historical authenticated login/proxy timestamps. No live heartbeat or Test RPC service |
 | Collateral display | Locked/free/returned derived from recorded project state; not a wallet balance or a partial unlock ledger |
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
 | Buyer offers, credits, PRL wallet, resources, inference and pool UI | Concept simulations/browser-local data, not production token balances or measured GPU capacity |
 
-Current end-to-end production publishing stops at **awaiting RPC** (or expiry/inactive state). `sales_enabled` is false. Private FRPC credential generation/download, registry synchronization, RPC/model/capacity acceptance, real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
+Current end-to-end production publishing stops at **awaiting RPC** (or expiry/inactive state). `sales_enabled` is false. RPC/model/capacity acceptance, real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
 
 ## Contracts and recorded evidence
 
@@ -42,7 +42,7 @@ The existing contract transfers the whole deposit on release/refund; it cannot i
 
 ## Separate reference stack
 
-The Python FRP stack implements transport authorization, route ownership, launch routing and a separate SQLite lifecycle/monitor with private bundle export. It is not the production Rust/MongoDB writer. Manual `frp_admin.py add`/`launch` commands are disabled. `init` starts an empty FRP registry; it does not provision Rust-issued IDs. FRPC remains mandatory in the intended deployment architecture.
+The Python FRP stack implements transport authorization, route ownership, launch routing and a separate SQLite lifecycle/monitor with private bundle export. It is not the production Rust/MongoDB writer. The native Rust service now provides owner-only FRPC bundles and project authorization on the existing dedicated FRPS; see [provider bundles](PROVIDER-BUNDLES.md). This does not synchronize the legacy Python registry or activate buyer routes. Manual `frp_admin.py add`/`launch` commands are disabled. `init` starts an empty FRP registry; it does not provision Rust-issued IDs. FRPC remains mandatory in the intended deployment architecture.
 
 Real local FRP transport was tested against mock inference. GPU model loading and the FRP Docker/public inference deployment are unverified. Native HTTPS, Google login and finalized Sepolia staking were verified separately; they do not establish working inference sales.
 
