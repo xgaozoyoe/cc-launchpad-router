@@ -1,3 +1,4 @@
+import type { Project, ProjectAction } from './projects';
 import type { IconName } from './components/Icon';
 export type View = 'launchpad' | 'credits' | 'supplier' | 'pool' | 'prl' | 'models' | 'browse' | 'resources';
 export type Family = 'Llama' | 'Qwen' | 'Mistral';
@@ -15,13 +16,13 @@ export interface Activity { title: string; detail: string; icon: IconName; time:
 export interface Notice { id: string; text: string; error?: boolean }
 export interface PrlTransfer {id:string;kind:'deposit'|'withdrawal';amount:number;at:string}
 export interface DemoState {
-  version: 2; wallet: number; credits: Record<string, number>; burned: number;
+  projects:Project[]; version: 2; wallet: number; credits: Record<string, number>; burned: number;
   stake: number; reserve: number; poolCapacity: number; poolOperators: PoolOperator[];
   launches: Launch[]; activity: Activity[]; lastRequest: Receipt | null;
   receipts: Receipt[]; notice: Notice | null;
   prlAvailable: number; prlTransfers: PrlTransfer[];
 }
-export type DemoAction =
+export type DemoAction = ProjectAction
   | {type:'prl-transfer';id:string;kind:'deposit'|'withdrawal';amount:number;at:string}
   | {type: 'buy'; id: string; launchId: string; quantity: number}
   | {type: 'redeem'; id: string; launchId: string; tokens: number; outage: boolean}

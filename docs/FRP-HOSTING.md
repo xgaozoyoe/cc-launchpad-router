@@ -1,5 +1,7 @@
 # Central FRPS and unified launch-ID router
 
+> Publishing workflow update: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; Launch ID and a private credential are issued only after stake acceptance. Complete RPC acceptance within 24h of the stake block. Legacy `frp_admin.py add` / `launch` commands shown below are historical and disabled pending the authenticated chain-backed project API.
+
 FRPC is required for every provider. The platform owns the public API hostname and resolves each **launch ID** to an assigned provider’s FRPC tunnel and exact model profile.
 
 ```text

@@ -47,6 +47,11 @@ class TunnelTest(unittest.TestCase):
             admin.add_launch(Args())
             Args.id = 'gpu-001'
             private = tmp / '.secrets/frp-server'
+            # Test-only accepted launch fixture; production uses verified stake lifecycle.
+            registry_file = private / 'registry.json'
+            fixture = json.loads(registry_file.read_text())
+            fixture['launches']['launch-001']['status'] = 'live'
+            registry_file.write_text(json.dumps(fixture))
             bundle = tmp / '.secrets/frp-bundles/gpu-001'
             registry.read_registry = lambda: json.loads((private / 'registry.json').read_text())
             policy = ThreadingHTTPServer(('127.0.0.1', 0), registry.Handler)

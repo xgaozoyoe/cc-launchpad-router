@@ -58,7 +58,7 @@ The current live Vercel deployment was uploaded separately. Adding these files t
 
 ## Integration status
 
-The current UI snapshot still has the earlier generic endpoint setup guide. The required FRPC/unified launch-ID routing is implemented at the repository root and documented in [HOSTING.md](../../docs/HOSTING.md). Wiring UI launch creation to that registry and updating the wizard to issue FRPC bundles remain pending.
+Credit creation now uses the stake-gated project flow: draft → simulated stake confirmation → Launch ID and tx-hash Provider ID → RPC acceptance within 24h of the simulated stake block → sales. The separate resource guide still has generic setup content. The required FRPC/unified launch-ID routing is implemented at the repository root and documented in [HOSTING.md](../../docs/HOSTING.md). Wiring UI launch creation to that registry and updating the wizard to issue FRPC bundles remain pending.
 
 Balances, transfers, capacity checks, credit issuance and inference in the UI are simulated. Resource records stay in this browser. No real PRL transactions, on-chain burns, provider probes or shared production ledger are implemented.
 

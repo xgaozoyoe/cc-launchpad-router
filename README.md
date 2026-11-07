@@ -37,18 +37,11 @@ The repository root contains the FRP infrastructure and launch router. The UI is
 - Per-provider credentials, TLS server verification and route-ownership checks.
 - Unit tests and an optional real FRP integration test using a mock inference API.
 
-## Quick start: platform operator
+## Stake-gated publishing
 
-Use a public Linux server with Docker, Compose v2, Python 3.11+ and OpenSSL. Configure DNS and firewall as described in the [operator guide](docs/FRP-HOSTING.md).
+**[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID and project credential → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-```bash
-python3 scripts/frp_admin.py init --server frps.example.com --api-domain api.example.com
-python3 scripts/frp_admin.py add --id gpu-001
-python3 scripts/frp_admin.py launch --id launch-001 --provider gpu-001
-docker compose -f frp/server/compose.yaml up -d
-```
-
-Replace example domains and IDs with actual platform values. Deliver only `.secrets/frp-bundles/gpu-001/` to that provider through a secure channel. Never publish server private keys or provider bundles.
+The UI demonstrates this flow. The backend lifecycle refuses real stake confirmation until the platform default-chain/contract verifier is configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; the authenticated project API, durable storage, chain adapter and real RPC acceptance integration remain pending.
 
 ## Quick start: computing provider
 

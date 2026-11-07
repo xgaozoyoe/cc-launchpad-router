@@ -4,6 +4,7 @@ import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -18,6 +19,8 @@ def identify(content, entries):
     item = entries.get(provider_id)
     if not item or not item.get('enabled') or not isinstance(token, str):
         return None
+    if item.get('status') == 'awaiting-rpc' and time.time() >= item.get('verification_deadline', 0):
+        return None
     digest = hashlib.sha256(token.encode()).hexdigest()
     return item if hmac.compare_digest(digest, item['credential_sha256']) else None
 
@@ -29,9 +32,10 @@ def authorize(op, content, entries):
         user = content.get('user', {})
         item = identify(user, entries) if isinstance(user, dict) else None
         provider_id = user.get('user') if isinstance(user, dict) else None
+        route_id = item.get('tunnel_id', provider_id) if item else None
         allowed = bool(item and content.get('proxy_type') == 'http'
-                       and content.get('proxy_name') == provider_id + '.inference'
-                       and content.get('subdomain') == provider_id
+                       and content.get('proxy_name') == route_id + '.inference'
+                       and content.get('subdomain') == route_id
                        and not content.get('custom_domains')
                        and not content.get('locations')
                        and not content.get('http_user') and not content.get('http_pwd')

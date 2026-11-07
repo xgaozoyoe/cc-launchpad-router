@@ -51,7 +51,7 @@ class PolicyTests(unittest.TestCase):
 
     def test_launch_id_routes_are_isolated_and_model_bound(self):
         provider = self.entries['gpu-001']
-        launch = {'id': 'launch-a', 'provider_id': 'gpu-001', 'enabled': True,
+        launch = {'id': 'launch-a', 'provider_id': 'gpu-001', 'enabled': True, 'status': 'live',
                   **{k: provider[k] for k in admin.MODEL}}
         data = {'providers': self.entries, 'launches': {'launch-a': launch}}
         route = router.resolve('/launches/launch-a/v1/chat/completions', 'POST', data)
@@ -65,6 +65,21 @@ class PolicyTests(unittest.TestCase):
         launch['revision'] = provider['revision']
         provider['enabled'] = False
         self.assertIsNone(router.resolve('/launches/launch-a/v1/models', 'GET', data))
+
+    def test_stake_hash_identity_uses_bound_internal_alias_and_expires(self):
+        provider_id='0x'+'a'*64
+        alias='p-'+hashlib.sha256(provider_id.encode()).hexdigest()[:40]
+        item={**self.entries['gpu-001'],'id':provider_id,'tunnel_id':alias,
+              'status':'awaiting-rpc','verification_deadline':3000}
+        entries={provider_id:item}
+        user={'user':provider_id,'metas':self.user['metas']}
+        proxy={'user':user,'proxy_type':'http','proxy_name':alias+'.inference','subdomain':alias}
+        with patch.object(registry.time,'time',return_value=2000):
+            self.assertFalse(registry.authorize('Login',user,entries)['reject'])
+            self.assertFalse(registry.authorize('NewProxy',proxy,entries)['reject'])
+            self.assertTrue(registry.authorize('NewProxy',proxy|{'subdomain':'gpu-001'},entries)['reject'])
+        with patch.object(registry.time,'time',return_value=3000):
+            self.assertTrue(registry.authorize('Login',user,entries)['reject'])
 
     def test_provisioned_bundle_has_bound_identity_and_valid_toml(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(admin, 'ROOT', Path(tmp)):

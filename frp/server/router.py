@@ -16,12 +16,14 @@ def resolve(path, method, registry):
     provider = registry.get('providers', {}).get(launch.get('provider_id')) if launch else None
     if not launch or not launch.get('enabled') or not provider or not provider.get('enabled'):
         return None
+    if launch.get('status') != 'live':
+        return None
     if any(launch.get(k) != provider.get(k) for k in ('model', 'revision', 'precision', 'context')):
         return None
     if (method, match[2]) not in (('GET', '/v1/models'), ('POST', '/v1/chat/completions')):
         return None
     # Host is built from an operator-assigned ID, never supplied by the public caller.
-    provider_id = provider['id']
+    provider_id = provider.get('tunnel_id', provider['id'])
     if not re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?', provider_id):
         return None
     return {'launch_id': launch['id'], 'host': provider_id + '.providers.internal', 'path': match[2]}

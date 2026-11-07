@@ -164,10 +164,8 @@ def main():
     args = parser.parse_args()
     if args.command == 'init':
         initialize(args)
-    elif args.command == 'add':
-        add_provider(args)
-    elif args.command == 'launch':
-        add_launch(args)
+    elif args.command in ('add', 'launch'):
+        raise ValueError('Manual identity/launch issuance is disabled. Use Lifecycle.confirm_stake with the configured default-chain verifier; stake confirmation must precede credential issuance.')
     else:
         registry = json.loads((ROOT / '.secrets/frp-server/registry.json').read_text())
         for item in registry['providers'].values():

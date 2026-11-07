@@ -10,7 +10,7 @@ export function PrlWallet({state,perform,onLaunch}:{state:DemoState;perform:(a:D
   const [amount,setAmount]=useState('1000');
   const [error,setError]=useState('');
   const locked=state.launches.filter(l=>l.own);
-  const staked=locked.reduce((sum,l)=>sum+l.stake,0);
+  const staked=locked.reduce((sum,l)=>sum+l.stake,0)+state.projects.filter(p=>p.status==='awaiting-rpc').reduce((sum,p)=>sum+p.stake,0);
   function open(next:'deposit'|'withdrawal'){setMode(next);setAmount('1000');setError('');}
   function submit(e:FormEvent<HTMLFormElement>){
     e.preventDefault();if(!mode)return;
