@@ -23,6 +23,11 @@ try:
             subprocess.run([str(base/'bin/bootstrap-mongo')],env=env,check=True)
             backend=subprocess.Popen([str(base/'bin/cc-central')],env=env)
             children.append(backend)
+            web_config=base/'private/web.json'
+            if web_config.exists():
+                web_env={**os.environ,**json.loads(web_config.read_text())}
+                web=subprocess.Popen(['/usr/bin/node',str(base/'web/.server-check/server/standalone.js')],env=web_env)
+                children.append(web)
             while all(child.poll() is None for child in children):
                 time.sleep(2)
         except Exception as exc:

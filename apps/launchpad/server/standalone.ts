@@ -26,6 +26,15 @@ const server=createServer(async(req,res)=>{
   // Local bypass never accepts identity supplied by the browser and is blocked in production.
   if(local&&!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress??'')){res.writeHead(403);res.end();return;}
   if(url.pathname==='/api/runtime')response=Response.json({integrated:true,localTestAccount:local},{headers:{'Cache-Control':'no-store'}});
+  else if(url.pathname==='/healthz'||url.pathname.startsWith('/api/v1/')){
+   const base=new URL(env.CENTRAL_API_ORIGIN??'');
+   if(!['http:','https:'].includes(base.protocol)||base.username||base.password||base.pathname!=='/'||base.search||base.hash)throw new Error('Invalid backend origin');
+   if(base.protocol==='http:'&&!['localhost','127.0.0.1','central'].includes(base.hostname))throw new Error('Backend requires HTTPS');
+   const upstreamHeaders=new Headers({'Content-Type':'application/json'});
+   for(const name of ['x-cc-user','x-cc-timestamp','x-cc-nonce','x-cc-signature']){const value=request.headers.get(name);if(value)upstreamHeaders.set(name,value);}
+   const upstream=await fetch(new URL(url.pathname+url.search,base),{method:req.method,headers:upstreamHeaders,body:['GET','HEAD'].includes(req.method??'GET')?undefined:Buffer.concat(chunks),redirect:'error',signal:AbortSignal.timeout(10000)});
+   response=new Response(upstream.body,{status:upstream.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+  }
   else if(url.pathname.startsWith('/api/auth/')){
    if(local)response=url.pathname==='/api/auth/session'?await localSession():Response.json({configured:true,localTestAccount:true});
    else response=await handleAuth(request,env);

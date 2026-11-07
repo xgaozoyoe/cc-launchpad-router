@@ -37,3 +37,11 @@ The bootstrap binary requires `MONGO_PORT`, `MONGO_ROOT_PASSWORD` and `MONGO_APP
 This deployment serves project drafts only. Wallet/stake verification, Launch ID issuance, FRP authorization and credit sales remain unconnected. The existing Vercel deployment and local UI configuration are not changed by deploying this backend. A Vercel connection still needs a reachable HTTPS origin and its server-only signing key; a Tailscale-only address is reachable only by tailnet members.
 
 Verified on Ubuntu: signed status, rejection of nonce replay, draft persistence, idempotent creation, cross-account 404, repeatable database initialization, and supervisor recovery after terminating the backend process. A host reboot was not performed.
+
+## Enabled UI gateway
+
+The production UI and Auth.js gateway are installed under `web/`. The supervisor also starts this Node process when `private/web.json` exists. It runs with `NODE_ENV=production`, Google authentication and no local test-account bypass. Google credentials are held only in the private configuration.
+
+The existing Caddy upstream on the tailnet's port 9001 now points to the UI gateway. Rust binds privately to `127.0.0.1:9002`. `/healthz` and signed `/api/v1/*` requests pass through to Rust, while `/api/central/*` derives the account from the verified Google session before signing backend requests. The domain root serves React and `/api/auth/*` handles login.
+
+Register `https://riddle.xyz/api/auth/callback/google` in the existing Google OAuth web client's Authorized redirect URIs. Without that entry Google returns `redirect_uri_mismatch`; the website and backend can be healthy while login is blocked. Real Google login has not been completed during deployment. Existing balances/purchases outside server projects remain simulations.
