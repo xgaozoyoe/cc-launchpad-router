@@ -30,7 +30,7 @@ export function App({account,onSignOut,onReauth,signingOut}:{account:Account;onS
   useEffect(()=>{setToast(state.notice);if(!state.notice)return;const timer=setTimeout(()=>setToast(null),4200);return ()=>clearTimeout(timer);},[state.notice]);
   function navigate(next:View){if(next==='supplier')next='launches';setView(next);location.hash=next;setMobileOpen(false);window.scrollTo({top:0,behavior:'smooth'});}
   function perform(action:DemoAction):boolean {const result=demoReducer(state,action);dispatch(action);return !result.notice?.error;}
-  function closeDialog(){if(dialog?.type==='launch')setLaunchesRevision(n=>n+1);setDialog(null);}
+  function closeDialog(){if(dialog?.type==='launch'){setLaunchesRevision(n=>n+1);navigate('launches');}setDialog(null);}
   function openLaunch(modelId?:string){navigate('launches');setDialog({type:'launch',modelId,resourceId:''});}
   const props={state,perform,navigate,openLaunch:()=>openLaunch(),openGuide:()=>setDialog({type:'guide'}),openBuy:(launchId:string)=>setDialog({type:'buy',launchId}),openPool:()=>setDialog({type:'pool'})};
   const creditModels=Object.values(state.credits).filter(n=>n>0).length;
