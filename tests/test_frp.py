@@ -73,7 +73,7 @@ class PolicyTests(unittest.TestCase):
               'status':'awaiting-rpc','verification_deadline':3000}
         entries={provider_id:item}
         user={'user':provider_id,'metas':self.user['metas']}
-        proxy={'user':user,'proxy_type':'http','proxy_name':alias+'.inference','subdomain':alias}
+        proxy={'user':user,'proxy_type':'http','proxy_name':provider_id+'.inference','subdomain':alias}
         with patch.object(registry.time,'time',return_value=2000):
             self.assertFalse(registry.authorize('Login',user,entries)['reject'])
             self.assertFalse(registry.authorize('NewProxy',proxy,entries)['reject'])

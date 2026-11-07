@@ -85,6 +85,8 @@ class Lifecycle:
         result = probe(self.data['launches'][p['launch_id']], self.data['providers'][p['provider_id']])
         if not isinstance(result, dict) or not all(result.get(k) is True for k in ('authentication', 'model', 'usage', 'capacity')):
             raise ValueError('RPC/model/capacity acceptance failed')
+        if getattr(self.verifier, 'require_contract_acceptance', False) and not self.verifier.contract_verified(p):
+            raise ValueError('Contract verification transaction must be finalized before sales activation')
         now = int(self.clock())  # Probe must finish, not just start, before the deadline.
         if now >= p['verification_deadline']:
             raise ValueError('RPC acceptance finished after the deadline')

@@ -34,7 +34,7 @@ def authorize(op, content, entries):
         provider_id = user.get('user') if isinstance(user, dict) else None
         route_id = item.get('tunnel_id', provider_id) if item else None
         allowed = bool(item and content.get('proxy_type') == 'http'
-                       and content.get('proxy_name') == route_id + '.inference'
+                       and content.get('proxy_name') == provider_id + '.inference'
                        and content.get('subdomain') == route_id
                        and not content.get('custom_domains')
                        and not content.get('locations')

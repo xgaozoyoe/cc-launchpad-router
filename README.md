@@ -37,11 +37,15 @@ The repository root contains the FRP infrastructure and launch router. The UI is
 - Per-provider credentials, TLS server verification and route-ownership checks.
 - Unit tests and an optional real FRP integration test using a mock inference API.
 
+## Stake contract and event monitor
+
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The real default chain/token/contract still require operator configuration. The React UI remains a simulation.
+
 ## Stake-gated publishing
 
 **[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID and project credential → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-The UI demonstrates this flow. The backend lifecycle refuses real stake confirmation until the platform default-chain/contract verifier is configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; the authenticated project API, durable storage, chain adapter and real RPC acceptance integration remain pending.
+The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; the authenticated project/download APIs, wallet UI and real RPC acceptance probe remain pending. Monitor state and issuance outbox now use SQLite.
 
 ## Quick start: computing provider
 

@@ -32,6 +32,18 @@ services:
       - ../../.secrets/frp-server:/data:ro
     depends_on:
       - frps
+  stake-monitor:
+    profiles: ["stake-monitor"]
+    image: python:3.12-alpine
+    restart: unless-stopped
+    command: ["python3", "/app/scripts/stake_monitor.py", "--config", "/run/config/chain.json", "--server-dir", "/data", "watch"]
+    environment:
+      CHAIN_RPC_URL: ${CHAIN_RPC_URL:-}
+    volumes:
+      - ../../scripts:/app/scripts:ro
+      - ./:/app/frp/server:ro
+      - ../../.secrets/chain.json:/run/config/chain.json:ro
+      - ../../.secrets/frp-server:/data
   https:
     image: caddy:2
     restart: unless-stopped

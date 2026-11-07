@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 .secrets/
+node_modules/
+contracts/out/
+contracts/cache/
+*.sqlite*
+contracts/broadcast/

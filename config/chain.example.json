@@ -1,0 +1,7 @@
+{
+  "chain_id": null,
+  "staking_contract": "REPLACE_WITH_DEPLOYED_LAUNCH_STAKE_ADDRESS",
+  "token_address": "REPLACE_WITH_DEFAULT_CHAIN_PRL_TOKEN_ADDRESS",
+  "deployment_block": null,
+  "batch_size": 100
+}
