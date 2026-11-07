@@ -39,7 +39,7 @@ The repository root contains the FRP infrastructure and launch router. The UI is
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The real default chain/token/contract still require operator configuration. The React UI remains a simulation.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); its RPC, deployed test PRL token and stake contract addresses still require operator configuration. The React UI remains a simulation.
 
 ## Stake-gated publishing
 

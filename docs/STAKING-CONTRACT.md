@@ -1,6 +1,6 @@
 # Stake contract and confirmed-event Launch ID issuance
 
-This repository includes an **EVM / ERC-20 implementation**. It does not select or deploy a default chain. Configure the platform's actual chain ID, PRL token address and deployed `LaunchStake` address before running the monitor. Non-EVM chains need a separate adapter.
+This repository includes an **EVM / ERC-20 implementation**. The development default chain is **Ethereum Sepolia (11155111 / 0xaa36a7)**, defined in `config/network.json`. Configure the Sepolia RPC, test PRL token address and deployed `LaunchStake` address before running the monitor. No contracts have been deployed by this configuration change. Non-EVM chains need a separate adapter.
 
 ## Contract flow
 
@@ -48,7 +48,7 @@ forge test -vv
 
 The source is `contracts/src/LaunchStake.sol`; the committed ABI is `contracts/abi/LaunchStake.json`. Foundry compiles Solidity 0.8.30 for Cancun. Set the target appropriately and retest if the actual chain does not support Cancun.
 
-Production deployment must be performed by the operator using the platform default-chain RPC and the actual PRL address. Constructor parameters are `(IERC20 token, address admin)`. Prefer a multisig admin and separate verifier/settler identities. Do not put private keys in Git, CLI arguments or chat. No real deployment or token approval was executed as part of this implementation.
+Sepolia test deployment must be performed by the operator using the platform default-chain RPC and the actual PRL address. Constructor parameters are `(IERC20 token, address admin)`. Prefer a multisig admin and separate verifier/settler identities. Do not put private keys in Git, CLI arguments or chat. No real deployment or token approval was executed as part of this implementation.
 
 ## Configure one default chain
 
@@ -63,7 +63,7 @@ Fill the real values:
 
 ```json
 {
-  "chain_id": 12345,
+  "chain_id": 11155111,
   "staking_contract": "0xYourDeployedLaunchStakeAddress",
   "token_address": "0xActualPRLTokenAddress",
   "deployment_block": 123456,
@@ -71,7 +71,7 @@ Fill the real values:
 }
 ```
 
-Numbers and addresses above are placeholders, not a recommended network. Set `CHAIN_RPC_URL` in the operator environment or a protected service secret. The monitor verifies `eth_chainId` and the contract's `stakeToken()` against this configuration. The provider RPC used for AI inference is a different service from this blockchain RPC.
+The chain ID above is Sepolia; contract addresses and deployment block are placeholders. Use a Sepolia test PRL ERC-20; Sepolia ETH pays gas and is not the token being staked. Do not reuse a mainnet token address. Set `CHAIN_RPC_URL` in the operator environment or a protected service secret. The monitor verifies `eth_chainId` and the contract's `stakeToken()` against this configuration. The provider RPC used for AI inference is a different service from this blockchain RPC.
 
 The RPC must support `eth_getLogs`, receipts, `eth_call` and the `finalized` block tag. It fails closed rather than treating `latest` as finalized. If the default chain uses different finality rules, implement and test that adapter explicitly.
 

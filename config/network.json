@@ -1,0 +1,14 @@
+{
+  "name": "Ethereum Sepolia",
+  "network": "sepolia",
+  "chain_id": 11155111,
+  "chain_id_hex": "0xaa36a7",
+  "testnet": true,
+  "native_currency": {
+    "name": "Sepolia Ether",
+    "symbol": "ETH",
+    "decimals": 18
+  },
+  "explorer": "https://sepolia.etherscan.io",
+  "rpc_url_env": "CHAIN_RPC_URL"
+}
