@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 import { Flow, Modal, ModelLogo } from './UI';
 import { money } from '../format';
 import type { DemoAction, DemoState } from '../types';
-export type DialogState = {type:'buy';launchId:string}|{type:'launch';modelId?:string;resourceId:string}|{type:'setup';modelId?:string}|{type:'pool'|'guide'}|null;
+export type DialogState = {type:'buy';launchId:string}|{type:'launch';modelId?:string;resourceId:string;projectId?:string}|{type:'setup';modelId?:string}|{type:'pool'|'guide'}|null;
 interface Props {state:DemoState;perform:(action:DemoAction)=>boolean;onClose:()=>void;onSuccess?:()=>void}
 export function BuyDialog({state,perform,onClose,launchId}:Props&{launchId:string}) {
   const launch=state.launches.find(l=>l.id===launchId);

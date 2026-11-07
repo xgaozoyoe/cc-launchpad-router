@@ -1,6 +1,6 @@
 import type { Project, ProjectAction } from './projects';
 import type { IconName } from './components/Icon';
-export type View = 'launchpad' | 'credits' | 'supplier' | 'pool' | 'prl' | 'models' | 'browse' | 'resources';
+export type View = 'launchpad' | 'credits' | 'supplier' | 'launches' | 'pool' | 'prl' | 'models' | 'browse' | 'resources';
 export type Family = 'Llama' | 'Qwen' | 'Mistral';
 export interface Launch {
   id: string; modelId:string; name: string; supplier: string; family: Family; precision: string;
