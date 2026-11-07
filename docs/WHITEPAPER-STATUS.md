@@ -1,18 +1,20 @@
 # White paper status
 
-The downloadable [10-slide PowerPoint](../apps/launchpad/public/whitepaper/ai-computing-credit-launchpad.pptx) is a **product concept**, not implementation documentation. Reviewed 2026-11-07. This review preserves the presentation file and records where it differs from the application; it does not claim the slides have been rewritten.
+The [10-slide PowerPoint](../apps/launchpad/public/whitepaper/ai-computing-credit-launchpad.pptx) was revised on 2026-11-07. It describes the product design and the current Sepolia prototype separately. Planned flows are labeled on-slide; the last slide lists connected capabilities and remaining work. It is not a claim that inference credit sales are operational.
 
-| Slides | Interpretation / discrepancy |
+| Slide | Content |
 | --- | --- |
-| 1–2 | Intended computing-credit product and participants. Credit token issuance, redemption and pool replacement are not live. |
-| 3 | Supplier journey omits the implemented draft → wallet binding → finalized stake → Launch ID → 24h RPC window. The statement about releasing PRL after a dispute period predates the agreed proportional-release rule. |
-| 4 | Buyer payment escrow, accepted-usage burn and refund policy are target behavior; only browser simulations exist. |
-| 5 | Pool qualification, readiness fees, rerouting and payments are planned, not operational services. |
-| 6 | Stake/credit distinction is a design principle. Actual test escrow has full return only; free/withdrawable and progressive release need a new accounting path. |
-| 7–8 | Successful settlement, replacement service and collateral penalties are planned. No integrated metering/settlement/slashing exists. |
-| 9 | The 100m-token/$1,000 example is illustrative, not an actual payment or validated pricing model. Under the newly agreed rule, only the provider-delivered and settled portion counts toward PRL unlocking; pool completion does not. |
-| 10 | Describes launch prerequisites. The actual implementation is a Sepolia test stake prototype, not an operational credit sale. |
+| 1 | AI Computing Credit Launchpad; product design plus Sepolia prototype |
+| 2 | Provider, launchpad and buyer roles; PRL collateral does not establish GPU capacity |
+| 3 | Create project → finalized stake → Launch/Provider IDs → mandatory FRPC/RPC acceptance; deadline is stake block time + 24h |
+| 4 | Buy one launch's credits → use inference → settle accepted usage; buyer flow remains planned |
+| 5 | Public-pool operator journey; replacement depends on capacity/funding and does not unlock primary-provider PRL |
+| 6 | Separate PRL collateral and burned compute credits; locked → free → withdrawal is planned, current escrow has full returns only |
+| 7 | Provider delivery/settlement and launch-scoped API; burn, payment and PRL unlocking are not integrated |
+| 8 | Supplier failure, attempted replacement and evidence review; failover/slashing are planned |
+| 9 | Proportional release example: 2,000 PRL × 60m settled provider credits / 100m fixed committed credits = 1,200 free; 800 locked, before withdrawal or penalties |
+| 10 | Google/project/wallet/stake/ID path connected; FRPC acceptance, sales, burn, settlement and partial release not connected |
 
-Agreed amendment for the next white paper revision: cumulative unlocked PRL equals initial stake multiplied by provider-delivered and settled credits divided by the fixed committed credit supply. Failed, unsettled and pool-served requests do not unlock supplier collateral. Free collateral is separately withdrawable; this is not implemented in the current escrow.
+The proportional-release rule counts only successful, settled delivery by the original provider. Failed, unsettled and pool-served requests do not count. The denominator is a fixed issuance commitment; cumulative settlement must be capped and idempotent. Speaker notes explain these constraints and identify repository evidence. The existing deployed escrow does not implement partial unlocking or a withdrawable ledger.
 
-Use [implementation status](IMPLEMENTATION-STATUS.md) and [the active staking guide](RUST-STAKING.md) for current technical behavior. A future presentation revision should incorporate this rule and the implemented publishing sequence while retaining the ten-slide limit and visual user journeys.
+The revision retains editable text and process diagrams, the original ten-slide limit, dimensions and typography. Package/layout/import checks and individual slide rendering were performed; no native PowerPoint execution is claimed. Technical behavior is maintained in [implementation status](IMPLEMENTATION-STATUS.md) and [the active staking guide](RUST-STAKING.md).
