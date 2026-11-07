@@ -15,6 +15,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Event monitor | Rust worker reads finalized logs, verifies evidence, atomically reserves IDs, checkpoints and halts on finalized-checkpoint changes |
 | 24h window | Stake block timestamp + 86400; confirmation consumes part of the window; expiry uses chain time |
 | Launch ID | Issued after accepted finalized stake; not permission to sell |
+| Provider setup guide | Opens from My launches; project-bound instructions/checklist and saved status refresh. No secret download, tunnel telemetry or Test RPC service |
 | Collateral display | Locked/free/returned derived from recorded project state; not a wallet balance or a partial unlock ledger |
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
