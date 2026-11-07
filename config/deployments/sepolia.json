@@ -1,0 +1,18 @@
+{
+  "chain_id": 11155111,
+  "network": "sepolia",
+  "staking_contract": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "token_address": "0x3347f108f03287bdb39cba95f40f7f39e6dff1f8",
+  "token_kind": "test-only-tPRL",
+  "deployment_block": 12082860,
+  "batch_size": 100,
+  "admin": "0x708adf851bf2da89a07da470b5882a5c99c51851",
+  "verifier": "0x708adf851bf2da89a07da470b5882a5c99c51851",
+  "settler": "0x708adf851bf2da89a07da470b5882a5c99c51851",
+  "transaction_hashes": [
+    "0xf36e57ddf734a760950cd04a27b881bccc71fb5e302217a5db8d001cb7c04210",
+    "0xfd800f1aada750f5201ae012a7bb8f297e5a5b2e520579e6eac083d6c2310389",
+    "0x319bbffbf94cbe9a5c8a30080eaaa788cfaba094a8939f99843fd75043d7d9c0",
+    "0x85d32c209a57f209c2ed6d76135104c666c1a8c7217157f096ca3e84c8522a4c"
+  ]
+}

@@ -1,8 +1,9 @@
 {
   "chain_id": 11155111,
-  "staking_contract": "REPLACE_WITH_DEPLOYED_LAUNCH_STAKE_ADDRESS",
-  "token_address": "REPLACE_WITH_DEFAULT_CHAIN_PRL_TOKEN_ADDRESS",
-  "deployment_block": null,
+  "staking_contract": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "token_address": "0x3347f108f03287bdb39cba95f40f7f39e6dff1f8",
+  "deployment_block": 12082860,
   "batch_size": 100,
-  "network": "sepolia"
+  "network": "sepolia",
+  "token_kind": "test-only-tPRL"
 }

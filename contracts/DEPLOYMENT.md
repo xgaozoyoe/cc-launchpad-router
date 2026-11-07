@@ -40,3 +40,11 @@ The exporter refuses another chain, missing/reverted transactions, noncanonical 
 Anvil rehearsal uses chain 31337, `ALLOW_LOCAL_DEPLOY=true`, an Anvil unlocked account, and Forge's `--unlocked --broadcast`. Export with `--allow-local` into a separate local-only file. Do not confuse a local deployment with a Sepolia deployment.
 
 Deployment alone does not connect the Rust API to stake events or enable sales. Wallet ownership, project registration, finalized indexing, Launch ID issuance and RPC acceptance still need to be integrated before a real launch can complete.
+
+## Recorded Sepolia deployment
+
+The verified public record is [`config/deployments/sepolia.json`](../config/deployments/sepolia.json). `config/chain.example.json` now points to this **test-only tPRL** deployment. The existing Rust service still does not index stake events or enable credit sales.
+
+The Ubuntu deployment command is `python3 ~/services/cc-launchpad/deploy/remote/deploy-stake.py` for simulation, with `--broadcast` for real Sepolia transactions. It reads the dedicated encrypted keystore and password file from `private/sepolia-wallet/` and refuses another deployment after a manifest is present. A prior broadcast requires explicit inspection/resume before any retry.
+
+During the first Sepolia attempt, the creation transaction exhausted the default gas limit and reverted. Its receipt and broadcast artifacts were archived under the remote `private/failed-deploy-*` directory. The node estimated approximately 4.18 million gas for creation, above the local EVM estimate; the successful retry used a larger gas-estimate margin. A gas limit is an upper bound; fees are charged for gas actually consumed.

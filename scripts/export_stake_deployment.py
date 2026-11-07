@@ -21,7 +21,7 @@ def main():
     url=os.environ.get('CHAIN_RPC_URL')
     if not url:raise ValueError('Set CHAIN_RPC_URL')
     def rpc(method,params):
-        request=urllib.request.Request(url,data=json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode(),headers={'Content-Type':'application/json'})
+        request=urllib.request.Request(url,data=json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode(),headers={'Content-Type':'application/json','User-Agent':'cc-launchpad-deployer/1.0'})
         try:
             with urllib.request.urlopen(request,timeout=30) as response:data=json.load(response)
         except Exception:raise RuntimeError('RPC request failed') from None

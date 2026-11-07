@@ -39,13 +39,13 @@ The repository root contains the FRP infrastructure and launch router. The UI is
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); its RPC, deployed test PRL token and stake contract addresses still require operator configuration. The React UI remains a simulation.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. The event monitor is not integrated into the Rust service yet.
 
 ## Stake-gated publishing
 
 **[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID and project credential → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; the authenticated project/download APIs, wallet UI and real RPC acceptance probe remain pending. Monitor state and issuance outbox now use SQLite.
+The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Download APIs, wallet integration and real RPC acceptance remain pending. The older Python monitor uses SQLite and remains a separate reference implementation.
 
 ## Quick start: computing provider
 
@@ -125,7 +125,7 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 
 ## Rust central backend
 
-The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. It has not replaced the existing Python FRP/stake services or been deployed to a public server. Sales remain disabled in this service until wallet, stake-event and Launch ID issuance integration is complete.
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Sales remain disabled in this service until wallet, stake-event and Launch ID issuance integration is complete.
 
 ## Run the integrated workspace
 
