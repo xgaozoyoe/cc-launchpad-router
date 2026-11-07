@@ -1,6 +1,6 @@
 # Stake contract and confirmed-event Launch ID issuance
 
-This repository includes an **EVM / ERC-20 implementation**. The development default chain is **Ethereum Sepolia (11155111 / 0xaa36a7)**, defined in `config/network.json`. Configure the Sepolia RPC, test PRL token address and deployed `LaunchStake` address before running the monitor. A test-only tPRL and LaunchStake deployment is recorded in `config/deployments/sepolia.json`; the Rust API has not yet integrated the event monitor. Non-EVM chains need a separate adapter.
+This repository includes an **EVM / ERC-20 implementation**. The development default chain is **Ethereum Sepolia (11155111 / 0xaa36a7)**, defined in `config/network.json`. Configure the Sepolia RPC, test PRL token address and deployed `LaunchStake` address before running the monitor. A test-only tPRL and LaunchStake deployment is recorded in `config/deployments/sepolia.json`; the active Rust/MongoDB staking implementation is documented in [RUST-STAKING.md](RUST-STAKING.md). The Python monitor described below is a separate reference implementation. Non-EVM chains need a separate adapter.
 
 ## Contract flow
 

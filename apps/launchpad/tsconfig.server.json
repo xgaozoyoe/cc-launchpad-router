@@ -18,6 +18,7 @@
     "server/auth.ts",
     "server/node-adapter.ts",
     "server/central.ts",
-    "server/standalone.ts"
+    "server/standalone.ts",
+    "server/account-link.ts"
   ]
 }

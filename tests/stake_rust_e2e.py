@@ -1,0 +1,144 @@
+"""Explicit integration test: disposable Anvil + authenticated MongoDB + real Rust API.
+Run with an eth-account Python environment after cargo build and forge build.
+"""
+import base64,hashlib,hmac,json,os,secrets,socket,subprocess,tempfile,time,urllib.request,urllib.error,uuid
+from pathlib import Path
+from eth_account import Account
+from eth_account.messages import encode_defunct
+from eth_utils import keccak
+ROOT=Path(__file__).resolve().parents[1]
+BIN=Path(os.environ.get('CARGO_TARGET_DIR','/tmp/cc-central-target'))/'debug'
+FOUNDRY=Path.home()/'.foundry/bin'
+def free_port():
+ with socket.socket() as s:s.bind(('127.0.0.1',0));return s.getsockname()[1]
+def wait(fn,timeout=60):
+ end=time.monotonic()+timeout
+ while time.monotonic()<end:
+  try:
+   value=fn()
+   if value:return value
+  except (OSError,urllib.error.URLError):pass
+  time.sleep(.5)
+ raise AssertionError('Timed out waiting for integration state')
+def project_key_for_test(id):return hashlib.sha256(id.encode()).hexdigest()
+def run():
+ children=[]
+ with tempfile.TemporaryDirectory(prefix='stake-rust-') as temp:
+  tmp=Path(temp);log=open(tmp/'service.log','w+');os.chmod(tmp,0o700)
+  def start(cmd,env=None):
+   p=subprocess.Popen(cmd,cwd=ROOT,env=env,stdout=log,stderr=log);children.append(p);return p
+  chain_port,mongo_port,api_port=free_port(),free_port(),free_port()
+  rpc_url=f'http://127.0.0.1:{chain_port}';api_url=f'http://127.0.0.1:{api_port}'
+  def rpc(method,params):
+   req=urllib.request.Request(rpc_url,data=json.dumps({'jsonrpc':'2.0','id':1,'method':method,'params':params}).encode(),headers={'Content-Type':'application/json'})
+   with urllib.request.urlopen(req,timeout=10) as r:d=json.load(r)
+   if 'error' in d:raise AssertionError(d['error'])
+   return d['result']
+  def send(sender,to,data):
+   tx={'from':sender,'data':data,'gas':'0x400000'}
+   if to:tx['to']=to
+   h=rpc('eth_sendTransaction',[tx]);r=wait(lambda:rpc('eth_getTransactionReceipt',[h]));assert r['status']=='0x1';return r
+  selector=lambda s:keccak(text=s)[:4].hex()
+  word=lambda n:f'{n:064x}'
+  addr=lambda a:a[2:].lower().rjust(64,'0')
+  key=bytes([7])*32
+  def api(method,path,body=None,user='alice',expected=200):
+   raw=b'' if body is None else json.dumps(body).encode();stamp=str(int(time.time()));nonce=secrets.token_hex(16)
+   message='\n'.join((method,path,user,stamp,nonce,hashlib.sha256(raw).hexdigest()))
+   headers={'Content-Type':'application/json','X-CC-User':user,'X-CC-Timestamp':stamp,'X-CC-Nonce':nonce,'X-CC-Signature':hmac.new(key,message.encode(),hashlib.sha256).hexdigest()}
+   request=urllib.request.Request(api_url+path,data=raw if method=='POST' else None,headers=headers,method=method)
+   try:
+    with urllib.request.urlopen(request,timeout=35) as r:code,data=r.status,json.load(r)
+   except urllib.error.HTTPError as e:code,data=e.code,json.load(e)
+   assert code==expected,(path,code,data)
+   return data
+  try:
+   start([str(FOUNDRY/'anvil'),'--host','127.0.0.1','--port',str(chain_port),'--silent'])
+   admin=wait(lambda:rpc('eth_accounts',[]))[0]
+   token_bytecode=json.loads((ROOT/'contracts/out/TestPRL.sol/TestPRL.json').read_text())['bytecode']['object']
+   stake_bytecode=json.loads((ROOT/'contracts/out/LaunchStake.sol/LaunchStake.json').read_text())['bytecode']['object']
+   token_receipt=send(admin,None,token_bytecode+addr(admin)+word(1000000*10**18));token=token_receipt['contractAddress']
+   escrow=send(admin,None,stake_bytecode+addr(token)+addr(admin))['contractAddress']
+   provider=Account.create();rpc('anvil_setBalance',[provider.address,hex(10**18)]);rpc('anvil_impersonateAccount',[provider.address])
+   send(admin,token,'0x'+selector('transfer(address,uint256)')+addr(provider.address)+word(2000*10**18))
+   assert int(rpc('eth_chainId',[]),16)==31337
+   # Standard public Anvil development key; never use it for a funded public-chain account.
+   admin_key='ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+   (tmp/'operator.json').write_text(json.dumps(Account.encrypt(bytes.fromhex(admin_key),'test-password')));(tmp/'password').write_text('test-password\n')
+   (tmp/'hmac').write_text(key.hex());(tmp/'mongo-key').write_text(base64.b64encode(secrets.token_bytes(512)).decode());(tmp/'mongo-key').chmod(0o600)
+   (tmp/'db').mkdir()
+   mongod=os.environ.get('MONGOD','/opt/homebrew/opt/mongodb-community@5.0/bin/mongod')
+   start([mongod,'--dbpath',str(tmp/'db'),'--port',str(mongo_port),'--bind_ip','127.0.0.1','--replSet','rs0','--auth','--keyFile',str(tmp/'mongo-key')])
+   root_pw,app_pw=secrets.token_hex(32),secrets.token_hex(32)
+   env={**os.environ,'MONGO_PORT':str(mongo_port),'MONGO_ROOT_PASSWORD':root_pw,'MONGO_APP_PASSWORD':app_pw}
+   time.sleep(1)
+   subprocess.run([str(BIN/'bootstrap-mongo')],env=env,check=True,stdout=log,stderr=log)
+   config={'chain_id':31337,'staking_contract':escrow,'token_address':token,'deployment_block':int(token_receipt['blockNumber'],16)}
+   (tmp/'chain.json').write_text(json.dumps(config))
+   env.update(MONGODB_URI=f'mongodb://launchpad:{app_pw}@127.0.0.1:{mongo_port}/launchpad?replicaSet=rs0&authSource=launchpad',CENTRAL_HMAC_KEY_FILE=str(tmp/'hmac'),BIND_ADDRESS=f'127.0.0.1:{api_port}',CHAIN_CONFIG_FILE=str(tmp/'chain.json'),CHAIN_RPC_URL=rpc_url,CHAIN_ALLOW_LOCAL='1',APP_ORIGIN='http://localhost:4174',STAKE_CAST=str(FOUNDRY/'cast'),STAKE_KEYSTORE=str(tmp/'operator.json'),STAKE_PASSWORD_FILE=str(tmp/'password'))
+   backend=start([str(BIN/'cc-central')],env)
+   wait(lambda:urllib.request.urlopen(api_url+'/healthz',timeout=1).status==200)
+   legacy=str(uuid.uuid4())
+   legacy_project=api('POST','/api/v1/projects',{'name':'Legacy login persistence','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())},user=legacy)['project']
+   api('POST','/api/v1/account/link-legacy',{'legacy_account_id':legacy},user='google:test-stable-subject')
+   api('GET','/api/v1/projects/'+legacy_project['_id'],user='google:test-stable-subject')
+   api('GET','/api/v1/projects/'+legacy_project['_id'],user=legacy)
+   api('POST','/api/v1/account/link-legacy',{'legacy_account_id':legacy},user='google:another-subject',expected=409)
+   project=api('POST','/api/v1/projects',{'name':'Rust stake integration','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project'];pid=project['_id'];path=f'/api/v1/projects/{pid}'
+   challenge=api('POST',path+'/stake/challenge',{'wallet_address':provider.address,'stake_amount':'2000'})
+   wrong=Account.sign_message(encode_defunct(text=challenge['message']),Account.create().key).signature.hex()
+   api('POST',path+'/stake/prepare',{'challenge_id':challenge['challenge_id'],'signature':'0x'+wrong.removeprefix('0x')},expected=400)
+   signature=Account.sign_message(encode_defunct(text=challenge['message']),provider.key).signature.hex()
+   proof={'challenge_id':challenge['challenge_id'],'signature':'0x'+signature.removeprefix('0x')}
+   api('POST',path+'/stake/prepare',proof)
+   api('POST',path+'/stake/prepare',proof,expected=400)
+   api('GET',path,user='bob',expected=404)
+   def get_status(status):
+    p=api('GET',path)['project'];return p if p['status']==status else None
+   registered=wait(lambda:get_status('awaiting-stake'),90);assert 'launch_id' not in registered
+   details=api('GET',path+'/stake');assert details['token_balance_raw']==str(2000*10**18)
+   approve=send(provider.address,token,details['approve_data'])
+   api('POST',path+'/stake/submit',{'tx_hash':approve['transactionHash']},expected=400)
+   stake_receipt=send(provider.address,escrow,details['stake_data']);tx_hash=stake_receipt['transactionHash']
+   snapshot=rpc('evm_snapshot',[])
+   api('POST',path+'/stake/submit',{'tx_hash':tx_hash})
+   before=api('GET',path)['project'];assert 'launch_id' not in before
+   rpc('anvil_mine',['0x80'])
+   issued=wait(lambda:get_status('awaiting-rpc'),90)
+   stake_block=rpc('eth_getBlockByNumber',[stake_receipt['blockNumber'],False]);at=int(stake_block['timestamp'],16)
+   assert issued['provider_id']==tx_hash and issued['staked_at']==at and issued['rpc_deadline']==at+86400 and issued['stake_finalized'] is True
+   saved=issued['launch_id'];time.sleep(11);assert api('GET',path)['project']['launch_id']==saved
+   # Contract expiry/refund disables the project without deleting its historic identity.
+   rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
+   send(provider.address,escrow,'0x'+selector('refundExpired(bytes32)')+registered['onchain_key'][2:])
+   refunded=wait(lambda:get_status('refunded'),60);assert refunded['launch_id']==saved
+   # A stake refunded before event finality must not poison the global cursor.
+   second=api('POST','/api/v1/projects',{'name':'Refund before finality','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project']
+   second_path='/api/v1/projects/'+second['_id']
+   challenge=api('POST',second_path+'/stake/challenge',{'wallet_address':provider.address,'stake_amount':'2000'})
+   sig=Account.sign_message(encode_defunct(text=challenge['message']),provider.key).signature.hex()
+   api('POST',second_path+'/stake/prepare',{'challenge_id':challenge['challenge_id'],'signature':'0x'+sig.removeprefix('0x')})
+   def second_state(status):
+    p=api('GET',second_path)['project'];return p if p['status']==status else None
+   wait(lambda:second_state('awaiting-stake'),90)
+   api('POST',second_path+'/stake/submit',{'tx_hash':tx_hash},expected=400)
+   detail=api('GET',second_path+'/stake');send(provider.address,token,detail['approve_data']);send(provider.address,escrow,detail['stake_data'])
+   rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
+   send(provider.address,escrow,'0x'+selector('refundExpired(bytes32)')+project_key_for_test(second['_id']))
+   rpc('anvil_mine',['0x80'])
+   early_refund=wait(lambda:second_state('refunded'),90);assert 'launch_id' not in early_refund
+   assert not api('GET','/api/v1/status')['chain']['error']
+   rpc('evm_revert',[snapshot])
+   wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
+   assert api('GET','/api/v1/status')['sales_enabled'] is False
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund.')
+  except Exception:
+   log.flush();log.seek(0);print(log.read()[-5000:]);raise
+  finally:
+   for p in reversed(children):
+    if p.poll() is None:p.terminate()
+   for p in reversed(children):
+    try:p.wait(timeout=15)
+    except subprocess.TimeoutExpired:p.kill()
+   log.close()
+if __name__=='__main__':run()

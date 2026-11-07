@@ -39,7 +39,7 @@ The repository root contains the FRP infrastructure and launch router. The UI is
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. The event monitor is not integrated into the Rust service yet.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). RPC acceptance and sales remain closed.
 
 ## Stake-gated publishing
 
@@ -125,7 +125,7 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 
 ## Rust central backend
 
-The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Sales remain disabled in this service until wallet, stake-event and Launch ID issuance integration is complete.
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Finalized stake events now reserve Launch IDs. Sales remain disabled until provider RPC/model/capacity acceptance is integrated.
 
 ## Run the integrated workspace
 
@@ -134,3 +134,7 @@ python3 scripts/stack.py local
 ```
 
 Open http://localhost:4174. The project dialog now saves drafts through the same-origin session gateway to Rust + MongoDB. [Single-host deployment and local testing](deploy/stack/README.md) includes Docker Compose, Google callback setup and the current integration scope.
+
+## Active staking flow
+
+[Wallet binding and finalized staking](docs/RUST-STAKING.md) documents the live Rust/MongoDB implementation, API, chain configuration and tests. The existing Python monitor is a separate legacy reference, not a second production writer.

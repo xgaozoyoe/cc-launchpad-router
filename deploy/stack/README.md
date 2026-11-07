@@ -55,7 +55,7 @@ Keep the private configuration and volume backups. Changing passwords in the env
 - Draft creation, supported Qwen profile, account-isolated listing/details and idempotent retries.
 - Existing credit balances, purchases and resources outside this dialog remain clearly labeled concept simulations.
 
-Stake/wallet verification, finalized event indexing, Launch ID credentials, FRPS routing and credit settlement are **not connected to the new Rust API yet**. No stake or sales actions are enabled by this stack. The previous Python FRP kit remains separate; do not expose it as if this draft API had authorized suppliers. This stack establishes the UI/backend/database path first.
+The default local stack has no chain configuration, so it saves drafts only. The production Rust service now supports wallet verification, chain registration and finalized Launch ID issuance when configured as described in [the staking guide](../../docs/RUST-STAKING.md). Provider credentials, FRPS routing and credit settlement are **not connected yet**. No stake actions are enabled without explicit chain/signer configuration, and sales remain disabled. The previous Python FRP kit remains separate; do not expose it as if this draft API had authorized suppliers. This stack establishes the UI/backend/database path first.
 
 ## Verification
 

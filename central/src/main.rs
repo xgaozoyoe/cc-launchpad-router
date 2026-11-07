@@ -1,4 +1,5 @@
 mod auth;
+mod stake;
 use axum::{
     body::Bytes,
     extract::{OriginalUri, State},
@@ -20,6 +21,7 @@ use std::sync::Arc;
 struct App {
     db: mongodb::Database,
     key: Vec<u8>,
+    stake: Option<stake::Stake>,
 }
 fn now() -> i64 {
     std::time::SystemTime::now()
@@ -69,6 +71,22 @@ async fn api(
         Err(e) => e.into_response(),
     }
 }
+async fn account_ids(app: &App, user: &str) -> Result<Vec<String>, mongodb::error::Error> {
+    let links = app
+        .db
+        .collection::<Document>("account_links")
+        .find(doc! {"canonical_id":user})
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let mut ids = vec![user.to_string()];
+    for link in links {
+        if let Ok(id) = link.get_str("_id") {
+            ids.push(id.to_string());
+        }
+    }
+    Ok(ids)
+}
 async fn dispatch(
     app: Arc<App>,
     path: &str,
@@ -76,10 +94,10 @@ async fn dispatch(
     headers: HeaderMap,
     body: Bytes,
 ) -> ApiResult {
-    let identity = auth::verify(&app.key, method.as_str(), path, &headers, &body, now())
+    let mut identity = auth::verify(&app.key, method.as_str(), path, &headers, &body, now())
         .map_err(|_| error(StatusCode::UNAUTHORIZED, "Invalid signed request"))?;
     // Unique insert is the replay barrier across processes; TTL only performs cleanup.
-    let nonce = doc! {"_id":format!("{}:{}",identity.user,identity.nonce),"expires_at":mongodb::bson::DateTime::from_millis((now()+120)*1000)};
+    let nonce = doc! {"_id":format!("{}:{}",identity.user,identity.nonce),"expires_at":mongodb::bson::DateTime::from_millis((now()+180)*1000)};
     if let Err(e) = app
         .db
         .collection::<Document>("request_nonces")
@@ -91,10 +109,113 @@ async fn dispatch(
         }
         return Err(unavailable(e));
     }
+    if let Some(link) = app
+        .db
+        .collection::<Document>("account_links")
+        .find_one(doc! {"_id":&identity.user})
+        .await
+        .map_err(unavailable)?
+    {
+        identity.user = link
+            .get_str("canonical_id")
+            .map_err(unavailable)?
+            .to_string();
+    }
+    let owners = account_ids(&app, &identity.user)
+        .await
+        .map_err(unavailable)?;
+    if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
+        if let Some((id, action)) = rest.split_once("/stake") {
+            if uuid::Uuid::parse_str(id).is_err()
+                || !(action.is_empty() || matches!(action, "/challenge" | "/prepare" | "/submit"))
+            {
+                return Err(error(StatusCode::NOT_FOUND, "Stake endpoint not found"));
+            }
+            let service = app.stake.as_ref().ok_or_else(|| {
+                error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Stake service is not configured",
+                )
+            })?;
+            return service
+                .handle(
+                    &app,
+                    &identity.user,
+                    id,
+                    method.as_str(),
+                    action.trim_start_matches('/'),
+                    &body,
+                )
+                .await
+                .map(Json)
+                .map_err(|e| {
+                    error(
+                        if e == "Project not found" {
+                            StatusCode::NOT_FOUND
+                        } else if e.contains("unavailable") || e.starts_with("Chain RPC") {
+                            StatusCode::SERVICE_UNAVAILABLE
+                        } else {
+                            StatusCode::BAD_REQUEST
+                        },
+                        &e,
+                    )
+                });
+        }
+    }
     match (method.as_str(), path) {
-        ("GET", "/api/v1/status") => Ok(Json(
-            json!({"network":"sepolia","chain_id":11155111,"sales_enabled":false,"stake_monitor":"not_integrated","wallet_verification":"not_integrated"}),
-        )),
+        ("POST", "/api/v1/account/link-legacy") => {
+            let input: Value = serde_json::from_slice(&body)
+                .map_err(|_| error(StatusCode::BAD_REQUEST, "Invalid account link"))?;
+            let legacy = input
+                .get("legacy_account_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| error(StatusCode::BAD_REQUEST, "Invalid legacy account"))?;
+            if !identity.user.starts_with("google:") || uuid::Uuid::parse_str(legacy).is_err() {
+                return Err(error(StatusCode::BAD_REQUEST, "Invalid account link"));
+            }
+            let links = app.db.collection::<Document>("account_links");
+            let result = links
+                .update_one(
+                    doc! {"_id":legacy},
+                    doc! {"$setOnInsert":{"canonical_id":&identity.user,"created_at":now()}},
+                )
+                .upsert(true)
+                .await;
+            if let Err(e) = result {
+                if !e.to_string().contains("E11000") {
+                    return Err(unavailable(e));
+                }
+            }
+            let link = links
+                .find_one(doc! {"_id":legacy})
+                .await
+                .map_err(unavailable)?
+                .ok_or_else(|| unavailable("Missing account link"))?;
+            if link.get_str("canonical_id").ok() != Some(identity.user.as_str()) {
+                return Err(error(StatusCode::CONFLICT, "Legacy account already linked"));
+            }
+            Ok(Json(json!({"linked":true})))
+        }
+        ("GET", "/api/v1/status") => {
+            let chain = if let Some(service) = &app.stake {
+                let id = format!(
+                    "{}:{}",
+                    service.config.chain_id, service.config.staking_contract
+                );
+                let row = app
+                    .db
+                    .collection::<Document>("chain_state")
+                    .find_one(doc! {"_id":id})
+                    .await
+                    .map_err(unavailable)?;
+                json!({"configured":true,"chain_id":service.config.chain_id,"staking_contract":service.config.staking_contract,"token_address":service.config.token_address,"finalized_block":row.as_ref().and_then(|d|d.get_i64("block").ok()),"halted":row.as_ref().and_then(|d|d.get_bool("halted").ok()).unwrap_or(false),"error":row.as_ref().and_then(|d|d.get_str("error").ok())})
+            } else {
+                json!({"configured":false})
+            };
+            Ok(Json(
+                json!({"network":"sepolia","sales_enabled":false,"chain":chain,"wallet_verification":"project-bound EIP-191 signature","rpc_acceptance":"not_integrated"}),
+            ))
+        }
         ("GET", "/api/v1/models") => Ok(Json(
             json!({"models":[{"id":"qwen3-8b-awq","model":"Qwen/Qwen3-8B-AWQ","revision":"93eb32ea9ef98cc266b85563ad0dd29e5f2940b9","context":4096}]}),
         )),
@@ -111,7 +232,7 @@ async fn dispatch(
                     "Provide a name, supported model and UUID request_id",
                 ));
             }
-            let filter = doc! {"account_id":&identity.user,"request_id":&draft.request_id};
+            let filter = doc! {"account_id":{"$in":owners.clone()},"request_id":&draft.request_id};
             let collection = app.db.collection::<Document>("projects");
             let record = doc! {"_id":uuid::Uuid::new_v4().to_string(),"account_id":&identity.user,"request_id":&draft.request_id,"name":draft.name.trim(),"model_id":&draft.model_id,"status":"draft","created_at":now()};
             // Atomic upsert plus unique index makes retried draft creation idempotent.
@@ -143,7 +264,7 @@ async fn dispatch(
             let rows = app
                 .db
                 .collection::<Document>("projects")
-                .find(doc! {"account_id":&identity.user})
+                .find(doc! {"account_id":{"$in":owners.clone()}})
                 .sort(doc! {"created_at":-1,"_id":1})
                 .limit(100)
                 .await
@@ -158,7 +279,7 @@ async fn dispatch(
             let row = app
                 .db
                 .collection::<Document>("projects")
-                .find_one(doc! {"_id":id,"account_id":&identity.user})
+                .find_one(doc! {"_id":id,"account_id":{"$in":owners.clone()}})
                 .await
                 .map_err(unavailable)?
                 .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
@@ -200,6 +321,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .await?;
+    for field in ["onchain_key", "provider_id", "launch_id"] {
+        db.collection::<Document>("projects")
+            .create_index(
+                IndexModel::builder()
+                    .keys({
+                        let mut keys = Document::new();
+                        keys.insert(field, 1);
+                        keys
+                    })
+                    .options(IndexOptions::builder().unique(true).sparse(true).build())
+                    .build(),
+            )
+            .await?;
+    }
+    let stake = stake::Stake::load().await.map_err(std::io::Error::other)?;
+    let app = Arc::new(App { db, key, stake });
+    tokio::spawn(stake::run(app.clone()));
     let routes = Router::new()
         .route("/healthz", get(health))
         .route("/api/v1/{*path}", get(api).post(api))
@@ -214,12 +352,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 r
             },
         ))
-        .with_state(Arc::new(App { db, key }));
+        .with_state(app);
     let listener = tokio::net::TcpListener::bind(
         std::env::var("BIND_ADDRESS").unwrap_or("127.0.0.1:9001".into()),
     )
     .await?;
-    println!("cc-central ready; draft API only, sales disabled");
+    println!("cc-central ready; sales remain disabled");
     axum::serve(listener, routes)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
@@ -290,6 +428,7 @@ mod integration {
         let app = Arc::new(App {
             db: db.clone(),
             key: vec![7; 32],
+            stake: None,
         });
         let path = "/api/v1/projects";
         let body=serde_json::to_vec(&json!({"name":"My Qwen","model_id":"qwen3-8b-awq","request_id":uuid::Uuid::new_v4().to_string()})).unwrap();
@@ -359,6 +498,7 @@ mod integration {
         let restarted = Arc::new(App {
             db: db.clone(),
             key: vec![7; 32],
+            stake: None,
         });
         assert!(dispatch(
             restarted,

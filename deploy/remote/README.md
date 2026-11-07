@@ -34,7 +34,7 @@ Before replacing binaries, stop the managed supervisor and wait for its children
 
 The bootstrap binary requires `MONGO_PORT`, `MONGO_ROOT_PASSWORD` and `MONGO_APP_PASSWORD` from the private configuration. It initializes only a loopback connection, uses MongoDB's localhost exception to create the first administrator on a fresh authenticated instance, and then creates the `launchpad` application user using authenticated administrator access. Repeating it does not overwrite existing users or passwords.
 
-This deployment serves project drafts only. Wallet/stake verification, Launch ID issuance, FRP authorization and credit sales remain unconnected. The existing Vercel deployment and local UI configuration are not changed by deploying this backend. A Vercel connection still needs a reachable HTTPS origin and its server-only signing key; a Tailscale-only address is reachable only by tailnet members.
+The deployment now supports drafts, project-bound wallet verification, chain registration and finalized stake-to-Launch-ID issuance. FRP authorization, RPC acceptance and credit sales remain unconnected. The separate Vercel demo and local configuration are not changed by this backend deployment. A Vercel connection still needs a reachable HTTPS origin and its server-only signing key; a Tailscale-only address is reachable only by tailnet members.
 
 Verified on Ubuntu: signed status, rejection of nonce replay, draft persistence, idempotent creation, cross-account 404, repeatable database initialization, and supervisor recovery after terminating the backend process. A host reboot was not performed.
 
@@ -45,3 +45,7 @@ The production UI and Auth.js gateway are installed under `web/`. The supervisor
 The existing Caddy upstream on the tailnet's port 9001 now points to the UI gateway. Rust binds privately to `127.0.0.1:9002`. `/healthz` and signed `/api/v1/*` requests pass through to Rust, while `/api/central/*` derives the account from the verified Google session before signing backend requests. The domain root serves React and `/api/auth/*` handles login.
 
 Register `https://riddle.xyz/api/auth/callback/google` in the existing Google OAuth web client's Authorized redirect URIs. Without that entry Google returns `redirect_uri_mismatch`; the website and backend can be healthy while login is blocked. Real Google login has not been completed during deployment. Existing balances/purchases outside server projects remain simulations.
+
+## Active staking worker
+
+The Rust process now verifies project-bound wallet signatures, registers prepared projects using the dedicated Sepolia operator keystore and indexes finalized stake events into MongoDB. See [the staking integration guide](../../docs/RUST-STAKING.md). New Launch IDs remain `awaiting-rpc`; no credit sales or provider credential bundles are activated yet.

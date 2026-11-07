@@ -22,10 +22,20 @@ test('unauthenticated, cross-origin and unknown paths never reach backend',async
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects',{method:'POST',headers:{origin:'https://attacker.example'},body:'{}'}),env,transport,session)).status,403);
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/admin'),env,transport,session)).status,404);
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects?other=1'),env,transport,session)).status,404);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/account/link-legacy',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,transport,session)).status,404);
 });
 test('configuration fails closed and outages are actionable',async()=>{
  const req=()=>new Request(env.APP_ORIGIN+'/api/central/status');
  assert.equal((await centralProxy(req(),{...env,CENTRAL_HMAC_KEY:''},fetch,session)).status,503);
  assert.equal((await centralProxy(req(),{...env,CENTRAL_API_ORIGIN:'http://attacker.example'},fetch,session)).status,503);
  assert.equal((await centralProxy(req(),env,async()=>{throw new Error('private connection detail');},session)).status,503);
+});
+
+test('stake routes preserve signing path and cannot bypass server verification',async()=>{
+ const id='11111111-1111-4111-8111-111111111111';
+ const input=new Request(env.APP_ORIGIN+'/api/central/projects/'+id+'/stake/prepare',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'});
+ const response=await centralProxy(input,env,async(url,options)=>{assert.equal(String(url),env.CENTRAL_API_ORIGIN+'/api/v1/projects/'+id+'/stake/prepare');assert.equal(new Headers(options?.headers).get('x-cc-user'),'verified-google-user');return Response.json({error:'Wallet signature does not match'},{status:400});},session);
+ assert.equal(response.status,400);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects/'+id+'/stake/prepare'),env,fetch,session)).status,405);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/projects/'+id+'/stake/verify-rpc',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,fetch,session)).status,404);
 });

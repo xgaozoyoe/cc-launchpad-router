@@ -1,0 +1,16 @@
+{
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "wallet": "0x708ADF851bf2DA89a07Da470b5882A5c99c51851",
+  "stake_amount": "2000",
+  "approval_tx": "0xee5a87fe6b7015dae012d2031785f97b81152d85479bcc4e14be1ce9452d7a03",
+  "stake_tx": "0x1d5039ab918853807c7640af2da60613033b22d7b3ae231bbf8f20bf7b7ba449",
+  "stake_block": 12083094,
+  "status": "awaiting-rpc",
+  "provider_id": "0x1d5039ab918853807c7640af2da60613033b22d7b3ae231bbf8f20bf7b7ba449",
+  "launch_id": "launch-9fe30c1a-2dbf-48fc-8f3d-b000a06295ea",
+  "staked_at": 1794047568,
+  "rpc_deadline": 1794133968,
+  "stake_finalized": true,
+  "chain_id": 11155111,
+  "sales_enabled": false
+}

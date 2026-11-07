@@ -52,3 +52,17 @@ test('CSRF endpoint issues a non-cacheable cookie for the OAuth flow',async()=>{
   assert.match(cookies,/Secure/i);
   assert.match(cookies,/SameSite=Lax/i);
 });
+
+test('Google account identity stays stable and links only a matching verified legacy session',async()=>{
+  const {authConfig}=await import('./auth.ts');
+  const legacy={sub:'11111111-1111-4111-8111-111111111111',email:'owner@example.com'};
+  const links:string[][]=[];
+  const callback=authConfig(env,legacy,async(_env,next,old)=>{links.push([next,old]);}).callbacks!.jwt!;
+  const input={token:{sub:'temporary-login-id'},user:{id:'temporary-login-id'},account:{provider:'google',providerAccountId:'123456789',type:'oidc' as const},profile:{sub:'123456789',email:'owner@example.com',email_verified:true},trigger:'signIn' as const,isNewUser:false};
+  assert.equal((await callback(input))?.sub,'google:123456789');
+  assert.deepEqual(links,[['google:123456789',legacy.sub]]);
+  const other=authConfig(env,{...legacy,email:'different@example.com'},async()=>{throw new Error('Must not link another account');}).callbacks!.jwt!;
+  assert.equal((await other({...input,token:{sub:'another-login-id'}}))?.sub,'google:123456789');
+  const failure=authConfig(env,legacy,async()=>{throw new Error('Migration unavailable');}).callbacks!.jwt!;
+  await assert.rejects(async()=>failure(input),/Migration unavailable/);
+});
