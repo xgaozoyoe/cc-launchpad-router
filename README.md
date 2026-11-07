@@ -10,7 +10,7 @@ A unified, launch-ID-based REST entry point for AI computing credit suppliers. *
 https://api.example.com/launches/<launch-id>/v1
 ```
 
-Every credit launch has a unique launch ID. The platform maps it to a provider ID and exact model profile. Provider IDs identify tunnels; launch IDs identify credit launches. Multiple launches may use the same provider’s tunnel without sharing credit balances.
+Every credit launch has a unique launch ID. The platform maps it to a provider ID and exact model profile. Provider IDs identify tunnels; launch IDs identify credit launches. The generic transport registry can associate several launches with a provider. The active stake workflow instead reserves one Provider ID (the full stake transaction hash) per project; no cross-project tunnel reuse is integrated.
 
 ```mermaid
 flowchart LR
@@ -24,11 +24,11 @@ Providers do not publish their own Internet-facing API domains. The model and FR
 
 ## Web application
 
-The complete TypeScript/React UI and Google authentication backend are in [`apps/launchpad/`](apps/launchpad/). This includes the model catalog, buyer credits, supplier studio, PRL wallet, compute setup wizard and white paper download. See the [app README](apps/launchpad/README.md) for local setup, tests and Vercel deployment.
+The complete TypeScript/React UI and Google authentication backend are in [`apps/launchpad/`](apps/launchpad/). This includes the model catalog, buyer credits, My launches, PRL wallet, compute setup wizard and white paper download. See the [app README](apps/launchpad/README.md) for local setup, tests and Vercel deployment.
 
-The repository root contains the FRP infrastructure and launch router. The UI is currently a demo snapshot; integration with the launch registry remains pending.
+The production workspace runs at https://riddle.xyz. Google login, account-owned MongoDB projects, wallet binding, Sepolia staking and finalized Launch ID issuance are connected. Buyer credits, PRL wallet and public-pool screens remain simulations. The separate Python FRP registry is not synchronized with the active Rust project records. See [implementation status](docs/IMPLEMENTATION-STATUS.md) before following infrastructure examples.
 
-## Included
+## Included in the separate inference/FRP reference kit
 
 - Qwen3 8B AWQ (4-bit), served by vLLM with authenticated chat, usage and SSE streaming.
 - Mandatory provider FRPC profile and central FRPS stack.
@@ -43,9 +43,9 @@ The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-
 
 ## Stake-gated publishing
 
-**[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID and project credential → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
+**[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID → provision project credential (pending integration) → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Download APIs, wallet integration and real RPC acceptance remain pending. The older Python monitor uses SQLite and remains a separate reference implementation.
+The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Private bundle download APIs and real RPC acceptance remain pending; wallet binding and staking are connected. The older Python monitor uses SQLite and remains a separate reference implementation.
 
 ## Quick start: computing provider
 
@@ -107,7 +107,7 @@ These are private central-host registration lists, not public buyer endpoints or
 
 This is a transport/provisioning starter. The router’s operator test mode forwards the supplier Bearer key. Production must authenticate buyers, validate credits for the launch ID, reserve credits, inject the supplier key from a server-side vault, meter accepted usage and burn the correct launch’s credits. Buyer authentication, the credit ledger, vault, issuance transaction, PRL settlement and failover are not implemented here. Never give supplier keys to buyers.
 
-The existing website’s setup and inference are simulated and its launch records are not automatically synchronized with this registry. The platform should register the same launch ID when issuance is approved. Aggregate capacity across multiple launches must be checked before issuing real credits.
+The website’s compute setup and buyer inference are simulated; its real server projects and finalized Launch IDs are not automatically synchronized with this separate FRP registry. The platform should register the same launch ID when issuance is approved. Aggregate capacity across multiple launches must be checked before issuing real credits.
 
 ## Versions and verification
 
@@ -115,7 +115,7 @@ The existing website’s setup and inference are simulated and its launch record
 - vLLM: `v0.10.2`.
 - Qwen repository: `Qwen/Qwen3-8B-AWQ`, revision `93eb32ea9ef98cc266b85563ad0dd29e5f2940b9`, AWQ 4-bit, 4096 context.
 - Tests passed for real local FRP TLS transport, launch-ID routing, API-key forwarding, streamed output and rejection of unauthorized routes, using a mock inference service.
-- GPU model loading, Docker deployment and public HTTPS certificate issuance have not been verified here.
+- GPU model loading and the Docker deployment have not been verified. The native Ubuntu web/API deployment and public HTTPS at riddle.xyz have been verified; this does not verify the FRP inference stack.
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -138,3 +138,7 @@ Open http://localhost:4174. The project dialog now saves drafts through the same
 ## Active staking flow
 
 [Wallet binding and finalized staking](docs/RUST-STAKING.md) documents the live Rust/MongoDB implementation, API, chain configuration and tests. The existing Python monitor is a separate legacy reference, not a second production writer.
+
+## Documentation and collateral rules
+
+[Implementation status](docs/IMPLEMENTATION-STATUS.md) distinguishes deployed behavior, separate reference code and agreed but unimplemented product rules. The downloadable PowerPoint is a concept white paper, not a statement of deployed capabilities. In My launches, PRL collateral is split into locked, free/withdrawable and returned balances. The current escrow supports full refunds/releases only; proportional unlocking after provider-delivered, settled credits is agreed but not implemented.

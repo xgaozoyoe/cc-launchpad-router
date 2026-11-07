@@ -1,6 +1,6 @@
 # Central FRPS and unified launch-ID router
 
-> Publishing workflow update: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; Launch ID and a private credential are issued only after stake acceptance. Complete RPC acceptance within 24h of the stake block. Legacy `frp_admin.py add` / `launch` commands shown below are historical and disabled pending the authenticated chain-backed project API.
+> Separate reference stack, not the active Rust/MongoDB deployment. Read [implementation status](IMPLEMENTATION-STATUS.md). Publishing workflow target: read [Stake-gated project lifecycle](PROJECT-LIFECYCLE.md). Provider ID is now the confirmed stake tx hash; The active Rust worker reserves the Launch ID after finalized stake acceptance; private credential delivery is not integrated. Complete RPC acceptance within 24h of the stake block. Manual `frp_admin.py add` / `launch` commands are disabled; they are not production onboarding steps.
 
 FRPC is required for every provider. The platform owns the public API hostname and resolves each **launch ID** to an assigned provider’s FRPC tunnel and exact model profile.
 
@@ -23,12 +23,10 @@ Run in the repository root:
 
 ```bash
 python3 scripts/frp_admin.py init --server frps.example.com --api-domain api.example.com
-python3 scripts/frp_admin.py add --id gpu-001
-python3 scripts/frp_admin.py launch --id launch-001 --provider gpu-001
 docker compose -f frp/server/compose.yaml up -d
 ```
 
-Use actual hostnames and the launch ID from the platform credit launch record. The `launch` command refuses to overwrite an existing binding.
+Use actual hostnames. Initialization starts an empty reference registry; it does not authorize any provider. The production application does not currently populate it.
 
 The stack contains:
 
@@ -39,11 +37,11 @@ The stack contains:
 | FRPS | Accepts provider FRPC tunnels over verified TLS; routes internal provider Hosts |
 | Private registry/plugin | Authorizes tunnel identities and route ownership; lists configured providers and launches |
 
-FRPS uses `providers.internal` solely as a private Host-routing suffix. For example, the router sends `Host: gpu-001.providers.internal` to `frps:8080`. These internal names need no DNS records, are never buyer API endpoints, and cannot be chosen by public callers.
+FRPS uses `providers.internal` solely as a private Host-routing suffix. For stake-backed records, the router uses the registry-assigned hashed alias in `Host: <alias>.providers.internal` to `frps:8080`; the full stake hash is too long for a DNS label. These internal names need no DNS records, are never buyer API endpoints, and cannot be chosen by public callers.
 
 ## 2. Deliver the provider bundle
 
-Initialization generates private server configuration in `.secrets/frp-server/`. Each `add` command issues a private `.secrets/frp-bundles/<provider-id>/` directory with:
+Initialization generates private server configuration in `.secrets/frp-server/`. The separate Python monitor/lifecycle can export `.secrets/frp-server/deliveries/<launch-id>/` after accepted stakes. The active Rust app does not create this directory or expose owner downloads. A reference bundle contains:
 
 - `frpc.toml`: provider identity, credential and tunnel settings.
 - `ca.crt`: pinned public FRPS certificate.
@@ -53,18 +51,11 @@ Deliver only that provider’s bundle through a secure channel. Never deliver `s
 
 The generated tunnel certificate is valid for 365 days; renew and redistribute the public trust certificate before expiry. The starter uses a shared FRP transport token plus an independently checked per-provider credential. A production identity service may replace the shared transport token with per-provider OIDC/mTLS.
 
-## 3. Register additional launches
+## 3. Project registration boundary
 
-```bash
-# Same provider/model, separate credit launch:
-python3 scripts/frp_admin.py launch --id launch-002 --provider gpu-001
+Manual `add` and `launch` commands refuse issuance. The separate Python lifecycle can create authenticated registry records after its trusted stake and RPC checks; see [reference monitor details](STAKING-CONTRACT.md). Do not edit JSON to bypass those checks or treat a Rust-issued Launch ID as an already provisioned FRP route.
 
-# A different provider:
-python3 scripts/frp_admin.py add --id gpu-002
-python3 scripts/frp_admin.py launch --id launch-003 --provider gpu-002
-```
-
-The registry is reread per request; adding providers/launches does not require Caddy hostname changes. Public URLs are always `https://<api-domain>/launches/<launch-id>/v1`.
+The reference registry is reread per request. Its configured public URL format is `https://<api-domain>/launches/<launch-id>/v1`; no such inference service is enabled by the current riddle.xyz deployment.
 
 The router accepts only:
 
@@ -101,7 +92,7 @@ Three layers must remain distinct:
 
 The current transport router only forwards a supplier Bearer key for operator smoke testing. It does not implement buyer authentication, a credential vault, credit reservation/burning, metering, PRL staking or failover. Do not give supplier credentials to buyers. Production requires the gateway to check credits for the requested launch ID and inject the supplier key server-side.
 
-The manual `launch` command is a bootstrap step. The production application should register the same launch ID atomically when credit issuance is approved and bind it to the verified provider/model. The existing demo website is not synchronized with this registry yet.
+The production controller still needs to synchronize the reserved Launch ID, stake-derived Provider ID and credential with this registry, enforce acceptance and activate routing. Rust server projects are not synchronized with it.
 
 ## Verification
 

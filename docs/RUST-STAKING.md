@@ -69,3 +69,9 @@ That link endpoint requires the server HMAC and is deliberately absent from the 
 ## Recorded Sepolia test
 
 [`config/test-results/sepolia-stake.json`](../config/test-results/sepolia-stake.json) records the actual 2,000 tPRL test stake and finalized Launch ID. The provider is the dedicated funded test deployment wallet. The project appears under the signed-in owner's account; its public report excludes the account identity and all signing secrets. The same Launch ID and deadline were read back after backend restart and fresh Google authentication. This test stops at `awaiting-rpc`; it does not claim GPU capacity, FRPC connectivity or credit sales have passed acceptance.
+
+## Collateral display and settlement boundary
+
+My launches shows real account project records and separates locked, free/withdrawable and returned collateral. The current contract has no partial unlock ledger: finalized active/expired deposits remain locked until a full refund or release, which transfers the entire stake to the wallet. The UI therefore reports free as zero, not an amount inferred from simulated credits. Unconfirmed deposits are not counted as confirmed locked collateral.
+
+The agreed future proportional-release rule and its accounting boundaries are documented in [the lifecycle](PROJECT-LIFECYCLE.md#collateral-after-delivery). No metering, settlement ingestion, free-balance withdrawal endpoint or progressive-release event indexing exists in this service yet.

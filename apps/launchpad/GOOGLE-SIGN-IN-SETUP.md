@@ -6,7 +6,9 @@ The Google client secret stays on the server. No database is needed for this
 demo's login sessions. Compute balances remain simulated, browser-local data,
 separated by Google account ID. This is not a backend for real token balances.
 
-Stable app URL: https://ai-computing-credit-launchpad-sinka.vercel.app
+Active integrated app URL: https://riddle.xyz
+
+The Vercel deployment is an alternative/earlier demo, configured separately. The production Ubuntu gateway reads private server configuration; see [remote operations](../../deploy/remote/README.md).
 
 Vercel settings: https://vercel.com/sinka/ai-computing-credit-launchpad/settings/environment-variables
 
@@ -18,15 +20,15 @@ select or create a Google Cloud project.
 - Under **Branding**, set the app name to **AI Computing Credit Launchpad** and
   supply your support/contact email.
 - Under **Audience**, choose **External** if people outside your Google Workspace
-  will use it. This app requests only basic identity scopes, which Google exempts
-  from test-user-list restrictions.
+  will use it. Configure publishing status, test users and organization policies
+  for the intended audience in Google Auth Platform.
 - Under **Clients**, create an OAuth client of type **Web application**.
 - Add the deployed app's HTTPS origin under **Authorized JavaScript origins**.
 - Add this exact **Authorized redirect URI**, replacing the origin with the
   deployment's stable domain:
 
 ```text
-https://ai-computing-credit-launchpad-sinka.vercel.app/api/auth/callback/google
+https://riddle.xyz/api/auth/callback/google
 ```
 
 For local development, add both of these as well:
@@ -49,7 +51,7 @@ In the hosting project's environment-variable settings, configure:
 | `GOOGLE_CLIENT_ID` | Web application client ID from Google |
 | `GOOGLE_CLIENT_SECRET` | Client secret from Google |
 | `AUTH_SECRET` | A fresh, strong random secret with at least 32 characters |
-| `APP_ORIGIN` | The exact HTTPS origin, for example `https://ai-computing-credit-launchpad-sinka.vercel.app` |
+| `APP_ORIGIN` | The exact HTTPS origin, for example `https://riddle.xyz` |
 | `AUTH_ACCESS_MODE` | `public` to allow all verified Google accounts |
 | `AUTH_ALLOWED_EMAILS` | Optional comma-separated list when using `private` mode |
 
@@ -62,8 +64,7 @@ set `APP_ORIGIN=http://localhost:4173`, and run `npm run dev`. Environment files
 ending in `.local` are ignored by Git. Restart the server after changing them.
 
 Public mode allows any verified Google account at the application layer. Google
-account policies still apply. Basic identity-only login is exempt from Google’s
-test-user-list restriction. Private mode
+account and OAuth audience policies still apply. Private mode
 requires an explicit email allowlist.
 
 ## 3. Deploy to independent hosting
@@ -71,8 +72,7 @@ requires an explicit email allowlist.
 The repository includes a Vercel Node function and route rewrites. Project:
 `ai-computing-credit-launchpad`, team: `eco-projects` (`sinka`).
 
-The original `chatgpt.site` demo remains unchanged. Its platform login gate cannot
-be replaced by this app's OAuth integration.
+The Ubuntu deployment uses the same Google OAuth flow through its Node gateway. The stable subject is derived from the Google provider account ID; legacy signed sessions can be linked on verified reauthentication. Project ownership is stored in MongoDB, independently of the browser-local simulated credit ledger.
 
 On Vercel, use a custom production domain or review Deployment Protection so the
 production app does not add a separate Vercel-account login in front of Google.

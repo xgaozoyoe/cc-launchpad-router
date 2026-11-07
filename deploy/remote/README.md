@@ -15,9 +15,9 @@ Layout under `~/services/cc-launchpad/`:
 - `run.sh`: supervisor launcher guarded by `flock`
 - `releases/`: source snapshots
 
-The backend binds to the configured Tailscale IPv4 address on port 9001. MongoDB binds only to `127.0.0.1:27189`, uses authentication and a dedicated read/write application account, and does not reuse the host's existing MongoDB instance. `/healthz` is readable on the tailnet; `/api/v1/*` requires signed server requests.
+The Node web/session gateway binds to the configured Tailscale IPv4 address on port 9001 and Rust binds to loopback port 9002. MongoDB binds only to `127.0.0.1:27189`, uses authentication and a dedicated read/write application account, and does not reuse the host's existing MongoDB instance. `/healthz` is readable on the tailnet; `/api/v1/*` requires signed server requests.
 
-The supervisor restarts both managed processes after a failure. A user crontab `@reboot` entry invokes `run.sh`; existing cron entries are preserved. The cron daemon must be active. Starting `run.sh` twice is prevented by its private lock. No system services, Docker permissions or firewall rules are changed.
+The supervisor manages MongoDB and Rust, plus Node when private/web.json exists, and restarts the managed stack after a process failure. A user crontab `@reboot` entry invokes `run.sh`; existing cron entries are preserved. The cron daemon must be active. Starting `run.sh` twice is prevented by its private lock. No system services, Docker permissions or firewall rules are changed.
 
 ## Operations
 
@@ -44,8 +44,14 @@ The production UI and Auth.js gateway are installed under `web/`. The supervisor
 
 The existing Caddy upstream on the tailnet's port 9001 now points to the UI gateway. Rust binds privately to `127.0.0.1:9002`. `/healthz` and signed `/api/v1/*` requests pass through to Rust, while `/api/central/*` derives the account from the verified Google session before signing backend requests. The domain root serves React and `/api/auth/*` handles login.
 
-Register `https://riddle.xyz/api/auth/callback/google` in the existing Google OAuth web client's Authorized redirect URIs. Without that entry Google returns `redirect_uri_mismatch`; the website and backend can be healthy while login is blocked. Real Google login has not been completed during deployment. Existing balances/purchases outside server projects remain simulations.
+Register `https://riddle.xyz/api/auth/callback/google` in the existing Google OAuth web client's Authorized redirect URIs. Without that entry Google returns `redirect_uri_mismatch`; the website and backend can be healthy while login is blocked. Real Google login and stable account/project persistence have been verified. Existing balances/purchases outside server projects remain simulations.
 
 ## Active staking worker
 
 The Rust process now verifies project-bound wallet signatures, registers prepared projects using the dedicated Sepolia operator keystore and indexes finalized stake events into MongoDB. See [the staking integration guide](../../docs/RUST-STAKING.md). New Launch IDs remain `awaiting-rpc`; no credit sales or provider credential bundles are activated yet.
+
+## UI-only updates
+
+The gateway serves React assets from `web/dist`. For a frontend-only release, build and store the artifact inside the project root, copy new assets while retaining previous hashed assets, then atomically replace `index.html` last. Record the source revision in `DEPLOYED_REVISION`. No backend/database restart is needed for static-only changes. This does not update Node authentication code, backend binaries or private environment configuration.
+
+My launches displays account-owned projects and current collateral balances. The test deployment stops at awaiting RPC; no FRPS inference endpoint, buyer sales or progressive collateral release has been activated.

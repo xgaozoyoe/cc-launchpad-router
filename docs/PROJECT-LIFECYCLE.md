@@ -1,34 +1,35 @@
 # Stake-gated project launch
 
-The publishing sequence is:
+See [implementation status](IMPLEMENTATION-STATUS.md) for the current scope. The active implementation uses Rust/MongoDB, not the Python/SQLite reference monitor.
 
-1. Create a project draft: choose model, name and intended terms. Only an internal project ID exists.
-2. Stake on the platform's **default chain**. The trusted server adapter verifies the successful canonical staking transaction/event, contract, owner, project binding, amount and required confirmations.
-3. After acceptance, issue the Launch ID and a private deployment credential. **Provider ID is the full normalized stake transaction hash.** One stake transaction may back only one project in this starter.
-4. Complete provider RPC/model/usage/capacity acceptance before `stake_block_timestamp + 86400`.
-5. Mark the launch live and open credit sales. The same Launch ID remains in its uniform API URL.
+## Active production flow
 
-The deadline starts at the on-chain stake block timestamp, not wallet submission, platform confirmation, credential issuance or the first FRPC connection. Confirmation and provisioning consume part of the 24-hour window. At exactly the deadline acceptance is rejected. Retrying confirmation does not reset the deadline or issue another secret.
+1. Create an account-owned model-specific draft. Only the internal project UUID exists.
+2. Bind the provider wallet with a project-bound EIP-191 signature. The server registers its SHA-256 project key, wallet and fixed stake amount on Sepolia.
+3. The provider approves test tPRL and stakes. Submission/mining alone does not issue an ID.
+4. The Rust worker verifies the finalized canonical stake event and atomically reserves the Launch ID. Provider ID is the full normalized stake transaction hash; one direct stake transaction backs one project.
+5. The project waits in `awaiting-rpc`. The deadline is `stake block timestamp + 86400`, including time spent waiting for finality. At/after the deadline it cannot pass acceptance. Expiry uses the latest chain block timestamp.
 
-The stake transaction hash is public identity, never a secret. The generated private credential belongs to this stake-backed project/launch. Suppliers must hold it to register the assigned tunnel. Because a 66-character `0x` transaction hash exceeds a DNS label, FRP uses a deterministic internal alias `p-<40 hex characters of SHA256(provider_id)>`. The full hash remains the registry Provider ID and FRPC user; the alias is checked server-side. Buyer URLs continue to use Launch ID, not the alias.
+My launches lists the owner's server projects, supports stage filters/search and resumes staking or displays deployment requirements. Drafts do not receive IDs. Browser-supplied flags, IDs and timestamps cannot confirm stakes. See [Rust staking](RUST-STAKING.md) for validation, configuration, failure recovery and tests.
 
-## Current code and boundaries
+## Remaining publishing work
 
-- `frp/server/lifecycle.py`: backend state machine, injected default-chain verifier and RPC acceptance probe, server-clock deadline enforcement, credential hash and identity issuance, sale eligibility.
-- `frp/server/registry.py`: validates the project-specific credential and ID binding; pending-deployment credentials stop admitting new sessions after the deadline.
-- `frp/server/router.py`: only `live` launches reach public inference; acceptance probes must use private operator routing before activation.
-- `apps/launchpad/src/projects.ts`, `state.ts`, `components/ProjectLaunch.tsx`: browser-local demonstration of this exact ordering. Mock stake hashes and timestamps are explicitly labeled. Only accepted projects enter the demo sales list.
+Private project deployment credentials and owner-only downloads, FRPC/FRPS authorization synchronized with MongoDB, real RPC/model/usage/capacity checks and sale activation are not integrated. No live sales can be opened through the current Rust API. The target is mandatory FRPC, then successful acceptance within the original 24h window, then sales on the same Launch ID.
 
-**The development default chain is Sepolia (11155111), but the deployed staking contract and test PRL addresses are not configured yet.** The EVM implementation and monitor are available in [STAKING-CONTRACT.md](STAKING-CONTRACT.md). The server lifecycle refuses stake confirmation without a trusted chain verifier. No browser-supplied hash, timestamp, `verified` flag or simulated confirmation is valid server evidence. The event monitor now integrates the EVM verifier and lifecycle in durable SQLite transactions and exports private deployment bundles after confirmed stakes. Production still requires actual chain/token/contract configuration and authenticated owner-only delivery APIs. It does not expose a production project HTTP API yet.
+The contract includes trusted `verifyProject` and full settlement/refund operations; their presence does not mean the application has automated them. A provider may call `refundExpired` for an unverified expired stake. Expiry alone does not transfer funds or slash collateral.
 
-The backend verifier interface receives `(tx_hash, project, default_chain)` and must return verified `chain_id`, `contract`, `tx_hash`, `project_id`, `owner`, `amount`, `block_timestamp` and `block_hash`. A raw user JSON object is not an adapter. Before RPC acceptance the stake is verified again to detect reorg/inconsistent receipts. The RPC probe must perform actual auth/model/usage/capacity checks, not accept client-provided booleans. The lifecycle requires the verified amount to equal the project stake requirement; the adapter must normalize chain decimals consistently.
+## Collateral after delivery
 
-The current hash-format guard is for 32-byte `0x` transaction IDs. If the actual default chain uses a different transaction format, its adapter/normalizer must be implemented explicitly; this code does not choose Ethereum or another chain on the user's behalf. Configure one chain per registry; use chain + tx identity if multi-chain support is added.
+Initially all deposited PRL is locked. The agreed future rule is:
 
-Legacy CLI `add`/`launch` issuance is disabled to avoid skipping stake acceptance. `init` remains available for central FRPS infrastructure and `list` for inspection. Existing legacy records require an audited migration before being marked live; the router no longer treats a missing status as live.
+`cumulative unlocked = initial stake × provider-delivered and settled credits / fixed committed credit supply`
 
-Expired projects remain unsellable, with no automatic slashing or refund. Production contract refund/cancel rules remain to be implemented. A live connection is not proof of model ownership or capacity. Credentials may be copied; device binding is not implemented.
+Only that provider's successful, settled delivery counts. Failed requests, unsettled usage and public-pool replacement do not count. The cumulative amount must be capped at the initial stake, use raw token arithmetic with rounding down, and be idempotent across repeated settlements. Free means unlocked but not yet withdrawn; returned means already transferred back. These settlement rules and partial withdrawal are **not implemented** in the current contract. Its full release/refund transfers the stake directly to the wallet.
 
-## UI demo
+## Separate reference implementation
 
-Open Supplier studio → Create / resume project. Create a draft, simulate stake confirmation, view the issued Launch ID, Provider ID, stake block time and deadline, then simulate RPC acceptance. This performs no chain transaction or provider probe and generates no usable server deployment secret. The website's state remains local and is not synchronized with the backend library.
+`frp/server/lifecycle.py`, `registry.py`, `router.py`, `monitor.py` and the Python stake CLI provide separate transport/lifecycle examples with SQLite and a private bundle outbox. They are not the production project writer. Their credential export and acceptance methods are not HTTP endpoints of the active Rust service. Never run the reference monitor as a second writer for the active deployment.
+
+`frp_admin.py add` and `launch` are disabled. `init` and `list` remain usable for the separate FRP infrastructure. Generic transport code supports more flexible provider/launch associations; the active workflow uses a project stake hash as Provider ID. Long transaction hashes need the deterministic internal alias enforced by that reference registry. A connected tunnel does not prove capacity or exclusive hardware ownership.
+
+The browser-local `ProjectLaunch` fallback remains a labeled simulation for standalone demo mode; it is not the integrated production flow.

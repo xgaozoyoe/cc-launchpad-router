@@ -7,7 +7,8 @@ The React 19 + TypeScript + Vite application used by the Launchpad demo, with Au
 - Login page and signed-in overview, with the downloadable PowerPoint white paper.
 - Supported models and provider offers, filtered by model and sorted by price.
 - Model/launch-specific credit balances and simulated inference receipts.
-- Supplier studio and credit creation.
+- My launches: account-owned server projects, stage filters, search, resume staking, Launch IDs, stake transactions and block-based RPC deadlines.
+- PRL collateral display in project cards/details: locked, free/withdrawable and returned. Partial unlocking is not implemented.
 - Compute-resource setup wizard, Docker download and endpoint configuration.
 - Simulated PRL wallet and public compute pool.
 
@@ -42,7 +43,7 @@ The build checks TypeScript, compiles and smoke-tests the Node authentication en
 
 Set the project's **Root Directory** to `apps/launchpad`, use `npm ci`, build with `npm run build`, and serve `dist`. The app's `vercel.json` includes the authentication rewrites. Configure server-side Google credentials, session secret and `APP_ORIGIN` for the actual deployed domain; register that domain's Google callback URL. See the setup document for details.
 
-The current live Vercel deployment was uploaded separately. Adding these files to GitHub does not automatically link or redeploy that project.
+The active integrated deployment is the native Ubuntu stack at https://riddle.xyz; see [remote operations](../../deploy/remote/README.md). Vercel support remains an alternative; its environment and deployment do not update automatically from the Ubuntu instance or a Git push.
 
 ## Architecture
 
@@ -58,8 +59,10 @@ The current live Vercel deployment was uploaded separately. Adding these files t
 
 ## Integration status
 
-Credit creation now uses the stake-gated project flow: draft → simulated stake confirmation → Launch ID and tx-hash Provider ID → RPC acceptance within 24h of the simulated stake block → sales. The separate resource guide still has generic setup content. The required FRPC/unified launch-ID routing is implemented at the repository root and documented in [HOSTING.md](../../docs/HOSTING.md). Wiring UI launch creation to that registry and updating the wizard to issue FRPC bundles remain pending.
+In the integrated workspace, Create project saves an account-owned MongoDB draft. Wallet binding, server registration, provider approve/stake transactions and finalized Sepolia event processing reserve the Launch ID. My launches displays these records and returns from project details to the dashboard. The old `#supplier` URL resolves to My launches.
 
-Balances, transfers, capacity checks, credit issuance and inference in the UI are simulated. Resource records stay in this browser. No real PRL transactions, on-chain burns, provider probes or shared production ledger are implemented.
+The active flow stops at `awaiting-rpc`. Private FRPC bundles, RPC/model/capacity acceptance, credit sales, a buyer ledger, metering/burning and settlement are not connected. Resource records and buyer/PRL wallet/pool balances remain browser-local simulations. The separate Python FRP registry is not automatically synchronized with Rust/MongoDB. See [implementation status](../../docs/IMPLEMENTATION-STATUS.md).
+
+The current escrow has no partial unlock ledger. Free/withdrawable is therefore zero for a recorded stake; a full release/refund transfers the entire amount directly back to the wallet. Draft/unconfirmed collateral is shown as unknown, not a confirmed deposit. The agreed proportional-release rule is a future contract/settlement change.
 
 Never put Google client secrets, inference API keys or session secrets in React code, `VITE_` variables, the public directory or Git. `.env.example` contains configuration placeholders only; real environment files are ignored.

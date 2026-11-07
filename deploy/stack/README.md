@@ -49,6 +49,8 @@ python3 scripts/stack.py down
 
 Keep the private configuration and volume backups. Changing passwords in the env file does not rotate users already stored in MongoDB; use an explicit database credential rotation. Do not run `down -v` against data you need.
 
+For the actual native Ubuntu production layout and verified Google sign-in, see [remote operations](../remote/README.md). This Compose recipe is an alternative and has not been exercised on that host.
+
 ## What is connected
 
 - React → same-origin session gateway → signed Rust API → MongoDB.

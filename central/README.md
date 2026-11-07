@@ -8,7 +8,7 @@ See [the active staking guide](../docs/RUST-STAKING.md) for configuration, API r
 
 Requests require a server-only HMAC envelope. The React app calls the same-origin session gateway, which verifies Google login and signs the verified account identity. Never put the HMAC key, signing keystore or its unlock file in browser code.
 
-Collections include `projects`, `request_nonces` and `chain_state`. Unique sparse indexes protect project on-chain keys, provider transaction hashes and Launch IDs. The MongoDB project document is the atomic issuance record, so a failed or replayed cursor batch cannot create a second ID.
+Collections include `projects`, `request_nonces`, `chain_state` and immutable legacy-to-canonical `account_links`. Unique sparse indexes protect project on-chain keys, provider transaction hashes and Launch IDs. The MongoDB project document is the atomic issuance record, so a failed or replayed cursor batch cannot create a second ID.
 
 ```sh
 cargo +stable test --manifest-path central/Cargo.toml --locked

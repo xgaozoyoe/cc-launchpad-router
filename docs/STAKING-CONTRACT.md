@@ -21,10 +21,10 @@ event ProjectStaked(
 
 `stakedAt` comes from `block.timestamp`, and the deadline is exactly `stakedAt + 24 hours`.
 
-5. The monitor waits for a **finalized** canonical stake event, verifies it and assigns the Launch ID and deployment credential. Provider ID equals the complete stake transaction hash.
-6. A trusted verifier performs RPC/model/usage/capacity checks and submits `verifyProject` to the contract **before the deadline**. After that transaction is finalized, the authenticated backend may call `Monitor.accept_rpc` with its trusted probe to mark the registry launch live.
+5. The active Rust worker waits for a **finalized** canonical stake event and reserves the Launch ID. Provider ID equals the complete stake transaction hash. It does not issue a deployment credential. The Python reference monitor separately implements bundle export.
+6. Target acceptance flow (not integrated in the active Rust app): a trusted verifier performs RPC/model/usage/capacity checks and submits `verifyProject` to the contract **before the deadline**. After that transaction is finalized, the authenticated backend may call `Monitor.accept_rpc` with its trusted probe to mark the registry launch live.
 
-Creating a Launch ID is not permission to sell. The public router rejects pending launches. The monitor never signs or broadcasts verifier/admin transactions.
+Creating a Launch ID is not permission to sell. The public router rejects pending launches. The Python reference monitor never signs or broadcasts verifier/admin transactions. The active Rust worker does sign project registration with its configured operator keystore.
 
 ## Permissions and custody
 
@@ -48,7 +48,7 @@ forge test -vv
 
 The source is `contracts/src/LaunchStake.sol`; the committed ABI is `contracts/abi/LaunchStake.json`. Foundry compiles Solidity 0.8.30 for Cancun. Set the target appropriately and retest if the actual chain does not support Cancun.
 
-The Sepolia test deployment uses the test-only tPRL token recorded in `config/deployments/sepolia.json`, not real PRL. Constructor parameters are `(IERC20 token, address admin)`. Prefer a multisig admin and separate verifier/settler identities. Do not put private keys in Git, CLI arguments or chat. Both test contracts have now been deployed; no provider stake or production token approval has been executed.
+The Sepolia test deployment uses the test-only tPRL token recorded in `config/deployments/sepolia.json`, not real PRL. Constructor parameters are `(IERC20 token, address admin)`. Prefer a multisig admin and separate verifier/settler identities. Do not put private keys in Git, CLI arguments or chat. Both test contracts and an actual 2,000 tPRL stake have been verified; see [the test record](../config/test-results/sepolia-stake.json). No production PRL approval or transfer is claimed. Partial unlocking and a free/withdrawable balance are not supported by this contract.
 
 ## Configure one default chain
 
@@ -75,7 +75,7 @@ These are mined Sepolia test contract addresses; the token is tPRL. Sepolia ETH 
 
 The RPC must support `eth_getLogs`, receipts, `eth_call` and the `finalized` block tag. It fails closed rather than treating `latest` as finalized. If the default chain uses different finality rules, implement and test that adapter explicitly.
 
-## Create a draft and register its on-chain key
+## Python reference only: create a draft and register its on-chain key
 
 Initialize the central FRPS configuration if it does not yet exist (do not overwrite an existing one):
 
@@ -86,7 +86,7 @@ python3 scripts/stake_monitor.py project --owner 0xActualWalletAddress --name "M
 
 The amount above is **only an example assuming 18 token decimals**. Use the actual PRL decimals and intended stake requirement. The tool prints a project UUID and `contract_project_key = SHA256(project UUID UTF-8)`. Register that bytes32 key, wallet and raw amount using the admin's contract transaction. The wallet then approves and stakes. This starter requires one project stake per direct contract transaction; batching multiple stakes or smart-account calls requires an explicit identity/event-index policy because Provider ID is the transaction hash.
 
-`project` is currently an **operator bootstrap CLI**. A production authenticated project API should call the same durable project creation logic, authorize the wallet against the logged-in account, and then register the project on-chain. The React UI still uses simulated stake transactions; no real wallet submission or delivery download API has been wired into it.
+`project` is currently an **operator bootstrap CLI**. A production authenticated project API should call the same durable project creation logic, authorize the wallet against the logged-in account, and then register the project on-chain. The integrated React UI instead uses real wallet binding and stake submission through Rust/MongoDB. A delivery download API is not wired into that production path.
 
 ## Start the event monitor
 
@@ -102,7 +102,7 @@ Or start the optional container profile after configuring the protected `CHAIN_R
 docker compose -f frp/server/compose.yaml --profile stake-monitor up -d
 ```
 
-Run **one monitor/registry writer per deployment**. The SQLite file is the authoritative monitor state. Do not edit the exported registry concurrently; use lifecycle/backend transactions. Other backend writers must use the same transaction/storage boundary.
+Run **one monitor/registry writer per deployment**. For this separate Python reference only, the SQLite file is the authoritative monitor state. Production uses MongoDB and the Rust worker; do not point both implementations at one live registry. Do not edit the exported registry concurrently; use lifecycle/backend transactions. Other backend writers must use the same transaction/storage boundary.
 
 For each finalized event, the monitor verifies chain, staking contract, PRL token, receipt success, canonical block hash, unique stake event, project key, wallet, exact amount, block timestamp, deadline and current on-chain stake state. Unknown project events pause scanning so projects can be synchronized before resuming. RPC errors pause/retry without advancing the cursor. Expired/refunded stakes never receive a new deployment identity.
 
