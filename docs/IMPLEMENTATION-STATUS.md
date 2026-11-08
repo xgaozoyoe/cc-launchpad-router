@@ -10,7 +10,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | --- | --- |
 | Google sign-in | Connected; stable Google subject, signed-session legacy linking and account isolation |
 | Model-specific project creation/list/details | Rust + MongoDB; authenticated through same-origin HMAC session gateway |
-| My launches | Real owner records, filters/search, resume/detail, stake transaction, Launch/Provider IDs and RPC deadline |
+| My launches | Real owner records, filters/search, resume/detail, stake transaction, Launch/Provider IDs, RPC deadline and green/yellow/red progress checklist joined from saved connector/RPC records |
 | Wallet proof and stake | EIP-191 EOA binding, fixed operator registration, provider approval/stake on Sepolia |
 | Event monitor | Rust worker reads finalized logs, verifies evidence, atomically reserves IDs, checkpoints and halts on finalized-checkpoint changes |
 | 24h window | Stake block timestamp + 86400; confirmation consumes part of the window; expiry uses chain time |

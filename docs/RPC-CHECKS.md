@@ -30,3 +30,7 @@ There is one MongoDB-backed test lease per project, bounded response sizes, HTTP
 - Browser routes use `/api/central/…`; POST requires the application Origin.
 
 **A pass does not call `verifyProject`, accept capacity, change `awaiting-rpc` to live, extend the deadline or enable sales.** Capacity/service commitment criteria, on-chain acceptance and buyer-facing launch API routing remain separate work. An old successful report is not continuous health monitoring.
+
+## Launch-card progress
+
+Owner-filtered project list/detail responses include only sanitized progress fields (`bundle_issued`, `last_proxy_at`, `rpc_status`, `rpc_checked_at`) joined from deployment and saved-check records. Credentials and report bodies are not copied into project records. The dashboard shows completed steps green, the current step yellow and later steps red, with matching text/symbols. Inactive projects have blocked incomplete steps and no active yellow step. A saved API pass changes the display to awaiting capacity acceptance and shows its test time; it does not change `awaiting-rpc`, verify capacity or open sales. Connector registration and test ticks are historical evidence, not continuous health.

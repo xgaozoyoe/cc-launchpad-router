@@ -157,7 +157,12 @@ def run():
    assert checked['capacity_accepted'] is False and checked['sales_enabled'] is False
    assert 'test-inference-secret' not in str(api('GET',path+'/deployment/rpc-check'))
    assert observed_hosts and all(h==route for h in observed_hosts)
-   assert api('GET',path)['project']['status']=='awaiting-rpc'
+   detail=api('GET',path)['project'];assert detail['status']=='awaiting-rpc'
+   assert detail['progress']['rpc_status']=='passed' and detail['progress']['last_proxy_at']>0
+   listed=next(p for p in api('GET','/api/v1/projects')['projects'] if p['_id']==pid)
+   assert listed['progress']==detail['progress']
+   assert set(listed['progress'])=={'bundle_issued','last_proxy_at','rpc_status','rpc_checked_at'}
+   assert all(p['_id']!=pid for p in api('GET','/api/v1/projects',user='bob')['projects'])
 
    saved=issued['launch_id'];time.sleep(11);assert api('GET',path)['project']['launch_id']==saved
    # Contract expiry/refund disables the project without deleting its historic identity.

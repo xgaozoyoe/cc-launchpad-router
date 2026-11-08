@@ -1,0 +1,6 @@
+import type {ServerProject} from '../server-projects';
+import {launchProgress} from '../launch-dashboard';
+export function LaunchChecklist({project}:{project:ServerProject}){
+ const steps=launchProgress(project),inactive=steps.some(step=>step.state==='blocked');
+ return <section className="launch-checklist" aria-label="Launch progress"><h3>Launch progress</h3><p className="launch-checklist-legend">Green: complete · Yellow: current · Red: not complete</p>{inactive?<p className="error">Project inactive. Incomplete steps are blocked; completed items are historical records.</p>:null}<ol>{steps.map(step=><li key={step.label} className={'launch-step '+step.state} aria-current={step.state==='current'?'step':undefined}><span className="launch-step-marker" aria-hidden="true">{step.state==='complete'?'✓':step.state==='current'?'●':'○'}</span><div><strong>{step.label}</strong><span className="launch-step-state">{step.state==='complete'?'Complete':step.state==='current'?'Current':step.state==='blocked'?'Blocked':'Later'}</span><small>{step.detail}</small>{step.label==='API checks passed'&&project.progress?.rpc_checked_at?<small>Last test: {new Date(project.progress.rpc_checked_at*1000).toLocaleString()}</small>:null}</div></li>)}</ol></section>;
+}

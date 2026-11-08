@@ -7,7 +7,7 @@ The React 19 + TypeScript + Vite application used by the Launchpad demo, with Au
 - Login page and signed-in overview, with the downloadable PowerPoint white paper.
 - Supported models and provider offers, filtered by model and sorted by price.
 - Model/launch-specific credit balances and simulated inference receipts.
-- My launches: account-owned server projects, stage filters, search, resume staking, Launch IDs, stake transactions and block-based RPC deadlines.
+- My launches: account-owned projects, stage filters/search, resume staking, Launch IDs, transactions and block-based RPC deadlines. A checklist shows completed steps in green, the current step in yellow and later/blocked steps in red; text labels and symbols accompany the colors. Saved RPC passes advance the displayed next step to capacity/on-chain acceptance without changing the underlying sale status.
 - Project-specific provider setup guide: assigned IDs/deadline, local API checks, FRPC bundle requirements and native connector commands, downloadable public checklist, and saved-state refresh. Owner-only Linux FRPC bundles and historical login/proxy observations are integrated; functional Test RPC results are saved, while live heartbeat and formal RPC/capacity acceptance remain unavailable. See [RPC checks](../../docs/RPC-CHECKS.md).
 - PRL collateral display in project cards/details: locked, free/withdrawable and returned. Partial unlocking is not implemented.
 - Compute-resource setup wizard, Docker download and endpoint configuration.

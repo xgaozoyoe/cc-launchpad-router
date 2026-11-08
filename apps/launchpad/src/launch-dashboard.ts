@@ -1,6 +1,6 @@
 import type {ServerProject} from './server-projects.ts';
 export type LaunchGroup='all'|'draft'|'staking'|'rpc'|'live'|'inactive'|'other';
-export const launchGroups:ReadonlyArray<{id:LaunchGroup;label:string}>=[{id:'all',label:'All projects'},{id:'draft',label:'Drafts'},{id:'staking',label:'Pending stake'},{id:'rpc',label:'Awaiting RPC'},{id:'live',label:'Selling credits'},{id:'inactive',label:'Inactive'}];
+export const launchGroups:ReadonlyArray<{id:LaunchGroup;label:string}>=[{id:'all',label:'All projects'},{id:'draft',label:'Drafts'},{id:'staking',label:'Pending stake'},{id:'rpc',label:'Setup & acceptance'},{id:'live',label:'Selling credits'},{id:'inactive',label:'Inactive'}];
 export function launchGroup(status:string):LaunchGroup {
  if(status==='draft')return 'draft';
  if(['awaiting-registration','awaiting-stake','stake-submitted'].includes(status))return 'staking';
@@ -28,3 +28,26 @@ export function stakeBalances(project:ServerProject){
   return {locked:returned?0n:total,free:0n,returned:returned?total:0n};
  }catch{return null;}
 }
+
+export type ProgressStep={label:string;state:'complete'|'current'|'upcoming'|'blocked';detail:string};
+export function launchProgress(project:ServerProject):ProgressStep[]{
+ const inactive=['expired','refunded','released','chain-halted'].includes(project.status);
+ const live=project.status==='live';
+ const rpc=project.progress?.rpc_status==='passed';
+ const completed=[true,project.stake_finalized===true,!!project.progress?.last_proxy_at,rpc,live,live];
+ const current=completed.findIndex(done=>!done);
+ const details=[
+  'Project saved to your account',
+  project.stake_finalized?'Finalized stake recorded':'Submit stake and wait for chain finality',
+  project.progress?.last_proxy_at?'Proxy registration recorded; not continuous health monitoring':'Start the assigned FRPC bundle on your model host',
+  rpc?'Saved API checks passed':project.progress?.rpc_status==='failed'?'Last API test failed; correct the issue and retest':'Run Test RPC through the assigned tunnel',
+  live?'Launch accepted':'Platform capacity and on-chain acceptance are not implemented yet',
+  live?'Credit sales open':'Sales remain closed until acceptance and sales integration'
+ ];
+ return ['Project created','Stake finalized','FRPC registered','API checks passed','Capacity & on-chain acceptance','Credit sales'].map((label,i)=>({label,state:completed[i]?'complete':inactive?'blocked':i===current?'current':'upcoming',detail:details[i]}));
+}
+export function projectBadge(project:ServerProject){
+ if(project.status!=='awaiting-rpc')return launchLabel(project.status);
+ return project.progress?.rpc_status==='passed'?'Awaiting capacity acceptance':project.progress?.last_proxy_at?'Awaiting API checks':'Awaiting connector';
+}
+export function projectAction(project:ServerProject){return project.status==='awaiting-rpc'&&project.progress?.rpc_status==='passed'?'View verification results':launchAction(project.status);}

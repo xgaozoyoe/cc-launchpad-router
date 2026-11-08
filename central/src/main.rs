@@ -89,6 +89,56 @@ async fn account_ids(app: &App, user: &str) -> Result<Vec<String>, mongodb::erro
     }
     Ok(ids)
 }
+// Join only public progress fields for the already owner-filtered project set.
+async fn project_progress(app: &App, rows: &mut [Document]) -> Result<(), mongodb::error::Error> {
+    let ids: Vec<String> = rows
+        .iter()
+        .filter_map(|p| p.get_str("_id").ok().map(str::to_string))
+        .collect();
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let deployments = app
+        .db
+        .collection::<Document>("provider_deployments")
+        .find(doc! {"_id":{"$in":&ids}})
+        .projection(doc! {"_id":1,"provider_id":1,"last_proxy_at":1})
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    let reports = app
+        .db
+        .collection::<Document>("rpc_checks")
+        .find(doc! {"_id":{"$in":&ids}})
+        .projection(doc! {"_id":1,"report.status":1,"report.checked_at":1,"report.provider_id":1})
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
+    for p in rows {
+        let id = p.get_str("_id").unwrap_or("");
+        let provider = p.get_str("provider_id").unwrap_or("");
+        let d = deployments.iter().find(|d| {
+            d.get_str("_id").ok() == Some(id) && d.get_str("provider_id").ok() == Some(provider)
+        });
+        let r = reports
+            .iter()
+            .find(|d| d.get_str("_id").ok() == Some(id))
+            .and_then(|d| d.get_document("report").ok())
+            .filter(|r| !provider.is_empty() && r.get_str("provider_id").ok() == Some(provider));
+        let mut progress = doc! {"bundle_issued":d.is_some()};
+        if let Some(at) = d.and_then(|d| d.get_i64("last_proxy_at").ok()) {
+            progress.insert("last_proxy_at", at);
+        }
+        if let Some(r) = r {
+            progress.insert("rpc_status", r.get_str("status").unwrap_or("unknown"));
+            if let Ok(at) = r.get_i64("checked_at") {
+                progress.insert("rpc_checked_at", at);
+            }
+        }
+        p.insert("progress", progress);
+    }
+    Ok(())
+}
 async fn dispatch(
     app: Arc<App>,
     path: &str,
@@ -271,7 +321,7 @@ async fn dispatch(
             Ok(Json(json!({"project":saved})))
         }
         ("GET", "/api/v1/projects") => {
-            let rows = app
+            let mut rows = app
                 .db
                 .collection::<Document>("projects")
                 .find(doc! {"account_id":{"$in":owners.clone()}})
@@ -280,6 +330,9 @@ async fn dispatch(
                 .await
                 .map_err(unavailable)?
                 .try_collect::<Vec<_>>()
+                .await
+                .map_err(unavailable)?;
+            project_progress(&app, &mut rows)
                 .await
                 .map_err(unavailable)?;
             Ok(Json(json!({"projects":rows})))
@@ -293,7 +346,11 @@ async fn dispatch(
                 .await
                 .map_err(unavailable)?
                 .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
-            Ok(Json(json!({"project":row})))
+            let mut rows = vec![row];
+            project_progress(&app, &mut rows)
+                .await
+                .map_err(unavailable)?;
+            Ok(Json(json!({"project":rows.remove(0)})))
         }
         _ => Err(error(StatusCode::NOT_FOUND, "Endpoint not available")),
     }
