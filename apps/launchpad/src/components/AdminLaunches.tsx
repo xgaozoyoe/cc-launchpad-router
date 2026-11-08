@@ -1,3 +1,5 @@
+import {adminSessionKey,readAdminSession,adminSessionStorage,restoreAdminSession,saveAdminSession,forgetAdminSession} from '../admin-session';
+import {ServerApiError} from '../server-projects';
 import {approvalBlocker,reviewCategory} from '../admin-review';
 import {DeploymentMigration} from './DeploymentMigration';
 import {MigrationControls} from './MigrationControls';
@@ -8,24 +10,45 @@ import {serverPost} from '../server-projects';
 import type {ServerProject} from '../server-projects';
 import {ensureWalletChain} from '../wallet-network';
 import {projectBadge} from '../launch-dashboard';
-type Wallet={request:(args:{method:string;params?:unknown[]})=>Promise<unknown>;on?:(event:string,fn:()=>void)=>void;removeListener?:(event:string,fn:()=>void)=>void};
+type Wallet={request:(args:{method:string;params?:unknown[]})=>Promise<unknown>;on?:(event:string,fn:(value?:unknown)=>void)=>void;removeListener?:(event:string,fn:(value?:unknown)=>void)=>void};
 type ReviewProject=ServerProject&{capacity_approval?:{wallet:string;at:number;reason:string;type:string};rpc_retest_available?:boolean;verification_tx_hash?:string;migration_holders?:string[];migration_available_group?:string;migration_stake_state?:number;migration_prl_principal_wei?:string;migration_credit_issued?:string;migration_credit_commitment?:string;migration_inventory_error?:string};
 type Listing={projects:ReviewProject[];admin_address:string;chain_id:number;contract:string;credit_contract?:string;candidate_groups?:string[]};
 const provider=()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;if(!p)throw new Error('Open this page in a browser with an Ethereum wallet extension.');return p;};
 const messageHex=(message:string)=>'0x'+Array.from(new TextEncoder().encode(message),b=>b.toString(16).padStart(2,'0')).join('');
-export function AdminLaunches(){
+export function AdminLaunches({accountId='current-account'}:{accountId?:string}){
+ const storageKey=adminSessionKey(accountId),storage=adminSessionStorage();
+ const [restoring,setRestoring]=useState(true),[sessionExpires,setSessionExpires]=useState(0);
  const [category,setCategory]=useState<'migration'|'approvals'>('migration');
  const [wallet,setWallet]=useState(''),[token,setToken]=useState(''),[listing,setListing]=useState<Listing|null>(null),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const epoch=useRef(0),switchingNetwork=useRef(false);
+ const epoch=useRef(0),switchingNetwork=useRef(false),identity=useRef({wallet:'',chainId:0});
+ identity.current={wallet,chainId:listing?.chain_id??0};
+ async function resume(){
+  const generation=epoch.current;setRestoring(true);
+  try{const result=await restoreAdminSession(storage,storageKey,provider(),access=>serverPost<Listing>('admin/query',{token:access}));
+   if(epoch.current!==generation)return;
+   setWallet(result.wallet);setToken(result.session?.token??'');setListing(result.listing??null);setSessionExpires(result.session?.expiresAt??0);
+   setNotice(result.session?'Admin session restored. No new signature was requested.':result.wallet?'Wallet is connected. Authorize an admin session to continue.':'');return !!result.session;
+  }catch(e){if(epoch.current===generation)setNotice(e instanceof Error?e.message:'Could not restore admin session.');}
+  finally{if(epoch.current===generation)setRestoring(false);}
+ }
+ useEffect(()=>{void resume();return()=>{epoch.current++;};},[storageKey]);
+ useEffect(()=>{if(!token||!sessionExpires)return;const timer=setTimeout(()=>{forgetAdminSession(storage,storageKey);setToken('');setListing(null);setSessionExpires(0);setNotice('Admin session expired. Your wallet remains connected; authorize a new session.');},Math.max(0,sessionExpires-Date.now()));return()=>clearTimeout(timer);},[token,sessionExpires,storageKey]);
  const now=Date.now()/1000;
  const queues={ready:listing?.projects.filter(p=>reviewCategory(p,now)==='ready')??[],waiting:listing?.projects.filter(p=>reviewCategory(p,now)==='waiting')??[],pending:listing?.projects.filter(p=>reviewCategory(p,now)==='pending')??[],accepted:listing?.projects.filter(p=>reviewCategory(p,now)==='accepted')??[]};
  useEffect(()=>{
   if(!token||busy)return;
   const generation=epoch.current;let active=true,running=false;
-  const timer=setInterval(()=>{if(running)return;running=true;void serverPost<Listing>('admin/query',{token}).then(data=>{if(active&&epoch.current===generation)setListing(data);}).catch(e=>{if(active){setError(e instanceof Error?e.message:'Could not refresh verification progress');clearInterval(timer);}}).finally(()=>{running=false;});},10000);
+  const timer=setInterval(()=>{if(running)return;running=true;void serverPost<Listing>('admin/query',{token}).then(data=>{if(active&&epoch.current===generation)setListing(data);}).catch(e=>{if(active){if(e instanceof ServerApiError&&(e.status===401||e.status===403)){forgetAdminSession(storage,storageKey);setToken('');setListing(null);setSessionExpires(0);setNotice('Admin session expired or no longer valid. Your wallet remains connected.');}else setError(e instanceof Error?e.message:'Could not refresh verification progress');clearInterval(timer);}}).finally(()=>{running=false;});},10000);
   return()=>{active=false;clearInterval(timer);};
  },[token,busy]);
- useEffect(()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;const clear=()=>{epoch.current++;setWallet('');setToken('');setListing(null);setNotice('Wallet changed. Connect and sign again.');};const chainChanged=()=>{if(!switchingNetwork.current)clear();};p?.on?.('accountsChanged',clear);p?.on?.('chainChanged',chainChanged);return()=>{epoch.current++;p?.removeListener?.('accountsChanged',clear);p?.removeListener?.('chainChanged',chainChanged);};},[]);
+ useEffect(()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;
+  const clear=()=>{epoch.current++;forgetAdminSession(storage,storageKey);setRestoring(false);setSessionExpires(0);setWallet('');setToken('');setListing(null);setNotice('Wallet or network changed. Authorize the matching admin session again.');};
+  const accountsChanged=(value?:unknown)=>{const expected=identity.current.wallet||readAdminSession(storage,storageKey,Date.now())?.wallet;if(expected&&Array.isArray(value)&&typeof value[0]==='string'&&value[0].toLowerCase()===expected.toLowerCase())return;clear();};
+  const chainChanged=(value?:unknown)=>{if(switchingNetwork.current)return;const expected=identity.current.chainId||readAdminSession(storage,storageKey,Date.now())?.chainId;if(expected&&typeof value==='string'&&/^0x[0-9a-f]+$/i.test(value)&&BigInt(value)===BigInt(expected))return;clear();};
+  p?.on?.('accountsChanged',accountsChanged);p?.on?.('chainChanged',chainChanged);p?.on?.('disconnect',clear);
+  return()=>{epoch.current++;p?.removeListener?.('accountsChanged',accountsChanged);p?.removeListener?.('chainChanged',chainChanged);p?.removeListener?.('disconnect',clear);};
+ },[storageKey]);
+
  async function signed<T>(intent:string,payload:unknown,address:string,progress?:(message:string)=>void){
   progress?.("Preparing an account-bound authorization challenge…");
   const beforeChallenge=epoch.current;
@@ -50,10 +73,14 @@ export function AdminLaunches(){
  async function refresh(access=token){const started=epoch.current;const data=await serverPost<Listing>('admin/query',{token:access});if(epoch.current===started)setListing(data);}
  async function run(label:string,fn:()=>Promise<void>){setBusy(label);setError('');setNotice('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Request failed');}finally{setBusy('');}}
  async function connect(){
-  const accounts=await provider().request({method:'eth_requestAccounts'});
+  let accounts=await provider().request({method:'eth_accounts'});
+  if(!Array.isArray(accounts)||!accounts.length)accounts=await provider().request({method:'eth_requestAccounts'});
   if(!Array.isArray(accounts)||typeof accounts[0]!=='string')throw new Error('No wallet selected');
-  const address=accounts[0].toLowerCase();
-  const auth=await signed<{token:string}>('login',{},address);setWallet(address);setToken(auth.token);await refresh(auth.token);
+  const address=accounts[0].toLowerCase();const generation=epoch.current;
+  const auth=await signed<{token:string}>('login',{},address);const data=await serverPost<Listing>('admin/query',{token:auth.token});
+  const [currentAccounts,currentChain]=await Promise.all([provider().request({method:'eth_accounts'}),provider().request({method:'eth_chainId'})]);
+  if(epoch.current!==generation||data.admin_address.toLowerCase()!==address||currentChain!=='0x'+data.chain_id.toString(16)||!Array.isArray(currentAccounts)||currentAccounts[0]?.toLowerCase()!==address)throw new Error('Wallet changed. Authorize again.');
+  const expiresAt=Date.now()+900000;saveAdminSession(storage,storageKey,{wallet:address,token:auth.token,chainId:data.chain_id,contract:data.contract,expiresAt});setWallet(address);setToken(auth.token);setListing(data);setSessionExpires(expiresAt);setNotice('Wallet connected · admin session active. Refreshing this tab will restore it automatically.');
  }
  async function retest(project:ReviewProject){
   const result=await signed<{report:{status:string;failure?:string}}>('retest',{project_id:project._id},wallet);
@@ -76,7 +103,7 @@ export function AdminLaunches(){
   await refresh();
  }
  const renderCard=(project:ReviewProject)=><ReviewCard project={project} adminWallet={listing?.admin_address??''} onRetest={()=>void run('Running signed RPC recheck',()=>retest(project))} busy={!!busy} onApprove={reason=>void run('Signing capacity approval',()=>approve(project,reason))} onVerify={()=>void run('Signing on-chain verification',()=>verify(project))}/>;
- return <section className="admin-page"><div className="page-heading"><div><span className="eyebrow">PLATFORM ADMINISTRATION</span><h1>Administration</h1><p>Deployment migration and model-launch approval are separate workflows.</p></div></div><div className="setup-note"><strong>Wallet authorization required</strong><p>The server verifies a fresh signature for protected actions. Google sign-in alone grants no admin authority. Confirm the configured network in your wallet.</p><button className="primary-button" disabled={!!busy} onClick={()=>void run('Connecting wallet',connect)}>{token?'Reconnect admin wallet':'Connect admin wallet & sign'}</button>{wallet?<p style={{overflowWrap:'anywhere'}}>Connected: {wallet}</p>:null}</div>{error?<p className="error" role="alert">{error}</p>:null}{notice?<p role="status" style={{overflowWrap:'anywhere'}}>{notice}</p>:null}{busy?<p role="status">{busy}…</p>:null}<nav className="admin-categories" aria-label="Administration category"><button className={category==='migration'?'primary-button':'outline-button'} aria-pressed={category==='migration'} onClick={()=>setCategory('migration')}>Deployment migration</button><button className={category==='approvals'?'primary-button':'outline-button'} aria-pressed={category==='approvals'} onClick={()=>setCategory('approvals')}>Waiting for approval ({queues.ready.length})</button></nav>{listing&&category==='migration'?<DeploymentMigration projects={listing.projects} sourceStake={listing.contract} sourceCredits={listing.credit_contract} targetGroup={listing.candidate_groups?.join(', ')} readiness={<ProtocolCutover token={token}/>}>{(()=>{const project=listing.projects.find(p=>p.migration_available_group);return project?<MigrationControls projectName={project.name} projectId={project._id} phase={project.migration_phase} group={project.migration_available_group} busy={!!busy} holders={project.migration_holders} onStatus={migrationStatus} onAction={async(operation,payload,progress)=>{let output:{tx_hash?:string}={};setBusy('Migration operation in progress');setError('');try{
+ return <section className="admin-page"><div className="page-heading"><div><span className="eyebrow">PLATFORM ADMINISTRATION</span><h1>Administration</h1><p>Deployment migration and model-launch approval are separate workflows.</p></div></div><div className="setup-note"><strong>Wallet authorization required</strong><p>The server verifies a fresh signature for protected actions. Google sign-in alone grants no admin authority. Confirm the configured network in your wallet.</p><button className="primary-button" disabled={!!busy||restoring||!!token} onClick={()=>void run('Connecting wallet',async()=>{const restored=await resume();if(restored===false)await connect();})}>{restoring?'Restoring wallet session…':token?'Wallet connected · session active':wallet?'Authorize admin session':'Connect admin wallet & sign'}</button>{wallet?<p style={{overflowWrap:'anywhere'}}>Connected: {wallet}</p>:null}{token&&sessionExpires?<p className="form-hint">Admin session valid until {new Date(sessionExpires).toLocaleTimeString()}. Refreshing restores this session; protected actions still require their own signature.</p>:null}</div>{error?<p className="error" role="alert">{error}</p>:null}{notice?<p role="status" style={{overflowWrap:'anywhere'}}>{notice}</p>:null}{busy?<p role="status">{busy}…</p>:null}<nav className="admin-categories" aria-label="Administration category"><button className={category==='migration'?'primary-button':'outline-button'} aria-pressed={category==='migration'} onClick={()=>setCategory('migration')}>Deployment migration</button><button className={category==='approvals'?'primary-button':'outline-button'} aria-pressed={category==='approvals'} onClick={()=>setCategory('approvals')}>Waiting for approval{listing?' ('+queues.ready.length+')':''}</button></nav>{listing&&category==='migration'?<DeploymentMigration projects={listing.projects} sourceStake={listing.contract} sourceCredits={listing.credit_contract} targetGroup={listing.candidate_groups?.join(', ')} readiness={<ProtocolCutover token={token}/>}>{(()=>{const project=listing.projects.find(p=>p.migration_available_group);return project?<MigrationControls projectName={project.name} projectId={project._id} phase={project.migration_phase} group={project.migration_available_group} busy={!!busy} holders={project.migration_holders} onStatus={migrationStatus} onAction={async(operation,payload,progress)=>{let output:{tx_hash?:string}={};setBusy('Migration operation in progress');setError('');try{
    const ready=await signed<{transaction?:Record<string,string>;gate?:string;governance?:string;operation_id?:string;delay_seconds?:number;plan_hash?:string}>(operation,payload,wallet,progress);
    if(operation==='migration-prepare'||operation==='migration-governance'){
     const target=operation==='migration-governance'?ready.governance:ready.gate;
