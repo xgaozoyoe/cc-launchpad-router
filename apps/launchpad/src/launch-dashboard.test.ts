@@ -28,3 +28,10 @@ test('accepted is setup-complete but never sales live',()=>{
  const p={...projects[1],status:'accepted',stake_finalized:true,progress:{bundle_issued:true,last_proxy_at:123,rpc_status:'passed'}};
  assert.equal(launchGroup(p.status),'rpc');assert.match(projectBadge(p),/sales closed/);assert.equal(launchProgress(p)[4].state,'complete');assert.equal(launchProgress(p)[5].state,'current');
 });
+
+test('capacity approval advances the badge to on-chain verification without claiming acceptance',()=>{
+ const p={...projects[1],capacity_approval:{wallet:'0xadmin',at:123,reason:'Demo approval',type:'manual-demo-not-benchmarked'},progress:{bundle_issued:true,rpc_status:'passed'}};
+ assert.equal(projectBadge(p),'Capacity approved · awaiting on-chain verification');
+ assert.equal(projectBadge({...p,status:'verification-pending'}),'Verification pending finality');
+ assert.equal(projectBadge({...p,status:'accepted'}),'Accepted · sales closed');
+});

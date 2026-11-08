@@ -49,6 +49,7 @@ export function launchProgress(project:ServerProject):ProgressStep[]{
 }
 export function projectBadge(project:ServerProject){
  if(project.status!=='awaiting-rpc')return launchLabel(project.status);
+ if(project.capacity_approval)return 'Capacity approved · awaiting on-chain verification';
  return project.progress?.rpc_status==='passed'?'Awaiting capacity acceptance':project.progress?.last_proxy_at?'Awaiting API checks':'Awaiting connector';
 }
 export function projectAction(project:ServerProject){return project.status==='awaiting-rpc'&&project.progress?.rpc_status==='passed'?'View verification results':launchAction(project.status);}
