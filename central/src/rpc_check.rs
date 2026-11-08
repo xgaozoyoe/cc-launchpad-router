@@ -22,6 +22,33 @@ fn usage(v: &Value) -> bool {
     };
     p > 0 && c > 0 && p.checked_add(c) == Some(t)
 }
+fn generation_failure(v: &Value) -> Option<String> {
+    let content = v["choices"][0]["message"]["content"].as_str();
+    let present = content.is_some_and(|s| !s.trim().is_empty());
+    let reason = v["choices"][0]["finish_reason"].as_str();
+    if present && reason == Some("stop") {
+        return None;
+    }
+    // Only allow known metadata; never persist arbitrary provider strings or content.
+    let reason = match reason {
+        Some("stop") => "stop",
+        Some("length") => "length",
+        Some("tool_calls") => "tool_calls",
+        Some("content_filter") => "content_filter",
+        None => "missing",
+        _ => "unrecognized",
+    };
+    let count = |key: &str| {
+        v["usage"][key]
+            .as_u64()
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| "missing/invalid".into())
+    };
+    Some(format!("Generation failed: finish_reason={reason}; content={}; prompt_tokens={}; completion_tokens={}; total_tokens={}; max_tokens=48. {}",
+        if present { "non-empty" } else if content.is_some() { "empty" } else { "missing/non-string" },
+        count("prompt_tokens"), count("completion_tokens"), count("total_tokens"),
+        if reason == "length" { "Output reached the token limit; no complete answer was returned." } else { "Expected non-empty text and finish_reason=stop." }))
+}
 async fn bounded(mut response: reqwest::Response) -> Result<Vec<u8>, String> {
     let mut data = Vec::new();
     while let Some(chunk) = response
@@ -129,16 +156,16 @@ async fn probes(host: &str, key: &str, checks: &mut Vec<Value>) -> Result<(), St
         .await
         .map_err(|_| "Generation request failed")?;
     if r.status() != 200 {
-        return Err("Generation API did not return success".into());
+        return Err(format!(
+            "Generation API returned HTTP {}; response body omitted",
+            r.status().as_u16()
+        ));
     }
     let v: Value =
         serde_json::from_slice(&bounded(r).await?).map_err(|_| "Invalid generation JSON")?;
-    if !v["choices"][0]["message"]["content"]
-        .as_str()
-        .is_some_and(|s| !s.trim().is_empty())
-        || v["choices"][0]["finish_reason"] != "stop"
-    {
-        return Err("Generation did not produce a complete answer within the test limit".into());
+    if let Some(detail) = generation_failure(&v) {
+        checks.push(json!({"id":"generation","passed":false,"detail":detail}));
+        return Err(detail);
     }
     checks.push(json!({"id":"generation","passed":true,"detail":"Complete non-streaming answer received; prompt/output content is not stored"}));
     if !usage(&v["usage"]) {
@@ -318,6 +345,28 @@ pub(crate) async fn run(app: &App, p: &Document, key: String) -> ApiResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn generation_diagnostics_are_precise_and_do_not_echo_content() {
+        let v = json!({"choices":[{"message":{"content":"private text"},"finish_reason":"length"}],"usage":{"prompt_tokens":12,"completion_tokens":48,"total_tokens":60}});
+        let d = generation_failure(&v).unwrap();
+        assert!(d.contains("finish_reason=length"));
+        assert!(d.contains("completion_tokens=48"));
+        assert!(!d.contains("private text"));
+        assert!(generation_failure(
+            &json!({"choices":[{"message":{"content":""},"finish_reason":"stop"}]})
+        )
+        .unwrap()
+        .contains("content=empty"));
+        assert!(generation_failure(
+            &json!({"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]})
+        )
+        .is_none());
+        assert!(
+            !generation_failure(&json!({"choices":[{"finish_reason":"secret-value"}]}))
+                .unwrap()
+                .contains("secret-value")
+        );
+    }
     #[test]
     fn reject_bad_usage_and_incomplete_sse() {
         assert!(usage(
