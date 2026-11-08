@@ -15,5 +15,14 @@
     "legacy and modular purchase/inference/burn/withdraw regression"
   ],
   "browser_fixture": "countdown, next step, transaction receipt status and disabled actions inspected",
-  "scope": "application status/metadata only; no live governance or asset transaction performed"
+  "scope": "application status/metadata only; no live governance or asset transaction performed",
+  "live_deployment": {
+    "application_revision": "8a67a80bf5ad82d69dff9e659c11123b94d9475f",
+    "health": 200,
+    "unauthenticated_status_post": 401,
+    "cross_origin_status_post": 403,
+    "status_get": 405,
+    "chain_service_configuration_fingerprints": "unchanged",
+    "live_governance_or_asset_transactions": false
+  }
 }
