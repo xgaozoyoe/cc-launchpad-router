@@ -56,12 +56,16 @@ def run():
    start([str(FOUNDRY/'anvil'),'--host','127.0.0.1','--port',str(chain_port),'--silent','--cache-path',str(tmp/'anvil-cache'),'--prune-history','100000'])
    admin=wait(lambda:rpc('eth_accounts',[]))[0]
    token_bytecode=json.loads((ROOT/'contracts/out/TestPRL.sol/TestPRL.json').read_text())['bytecode']['object']
-   stake_bytecode=json.loads((ROOT/'contracts/out/LaunchStake.sol/LaunchStake.json').read_text())['bytecode']['object']
+   progressive=os.environ.get('PROGRESSIVE_STAKE_TEST')=='1'
+   stake_artifact='LaunchStakeV2' if progressive else 'LaunchStake'
+   stake_bytecode=json.loads((ROOT/f'contracts/out/{stake_artifact}.sol/{stake_artifact}.json').read_text())['bytecode']['object']
    token_receipt=send(admin,None,token_bytecode+addr(admin)+word(1000000*10**18));token=token_receipt['contractAddress']
    escrow=send(admin,None,stake_bytecode+addr(token)+addr(admin))['contractAddress']
    settler=Account.create();rpc('anvil_setBalance',[settler.address,hex(10**18)])
-   credits_code=json.loads((ROOT/'contracts/out/ComputeCredits.sol/ComputeCredits.json').read_text())['bytecode']['object']
+   credits_artifact='ComputeCreditsV2' if progressive else 'ComputeCredits'
+   credits_code=json.loads((ROOT/f'contracts/out/{credits_artifact}.sol/{credits_artifact}.json').read_text())['bytecode']['object']
    credit_receipt=send(admin,None,credits_code+addr(escrow)+addr(admin)+addr(settler.address)+addr(admin));credits=credit_receipt['contractAddress']
+   if progressive:send(admin,escrow,'0x'+selector('bindCreditContract(address)')+addr(credits))
    (tmp/'settler.json').write_text(json.dumps(Account.encrypt(settler.key,'test-password')))
    (tmp/'credits.json').write_text(json.dumps({'chain_id':31337,'contract':credits,'staking_contract':escrow,'settler':settler.address,'deployment_block':int(credit_receipt['blockNumber'],16)}))
    provider=Account.create();rpc('anvil_setBalance',[provider.address,hex(10**18)]);rpc('anvil_impersonateAccount',[provider.address])
@@ -354,6 +358,28 @@ def run():
     time.sleep(1);rpc('anvil_mine',['0x80'])
     b=api('GET',credit_path,user='paid-buyer');return b if b['finalized']['burned']=='3' and b['requests'][0]['status']=='settled' else None
    settled=wait(finalized_burn,150);assert settled['available']=='997' and settled['consumed_pending']=='0'
+   collateral_path=third_path+'/collateral'
+   api('GET',collateral_path,user='bob',expected=404)
+   collateral=api('GET',collateral_path)
+   if progressive:
+    assert collateral['progressive'] and collateral['finalized']['free']=='6000000000000000' and collateral['finalized']['locked']=='1999994000000000000000'
+    api('POST',collateral_path+'/withdraw',{'amount_raw':'6000000000000001'},expected=409)
+    api('POST',collateral_path+'/withdraw',{'amount_raw':'1'},user='bob',expected=404)
+    prepared_prl=api('POST',collateral_path+'/withdraw',{'amount_raw':'3000000000000000'})['transaction']
+    assert prepared_prl['from']==provider.address.lower() and prepared_prl['to']==escrow.lower()
+    # Wrong wallet fails at the contract even if it has the prepared calldata.
+    bad=rpc('eth_sendTransaction',[{'from':buyer.address,'to':escrow,'data':prepared_prl['data'],'gas':'0x800000'}]);assert wait(lambda:rpc('eth_getTransactionReceipt',[bad]))['status']=='0x0'
+    withdrawal=send(provider.address,escrow,prepared_prl['data'])
+    api('POST',collateral_path+'/submit',{'tx_hash':withdrawal['transactionHash']})
+    pending_prl=api('GET',collateral_path);assert pending_prl['withdrawal_pending_raw']=='3000000000000000' and pending_prl['finalized']['returned']=='0'
+    rpc('anvil_mine',['0x80'])
+    freed=api('GET',collateral_path);assert freed['finalized']['free']=='3000000000000000' and freed['finalized']['returned']=='3000000000000000' and freed['withdrawals'][0]['status']=='finalized'
+    assert api('GET',third_path)['project']['status']=='accepted'
+    print('PASS progressive collateral: finalized provider burn unlocks proportional PRL; provider-only partial withdrawal, pending/finalized returned balances and credit/RPC eligibility preserved.',flush=True)
+   else:
+    assert not collateral['progressive']
+    api('POST',collateral_path+'/withdraw',{'amount_raw':'1'},expected=409)
+
    tx=api('POST',credit_path+'/withdraw',{'quantity':997},user='paid-buyer')['transaction'];send(buyer.address,credits,tx['data']);rpc('anvil_mine',['0x80'])
    api('POST',credit_path+'/infer',{**request,'request_id':str(uuid.uuid4())},user='paid-buyer',expected=409)
    def approved_withdrawal():

@@ -105,3 +105,13 @@ test('paid credit routes require authenticated sessions, same origin and exact m
  assert.equal(calls,13);
  assert.equal((await centralProxy(request(id+'/settle','POST'),env,transport,session)).status,404);
 });
+
+test('collateral withdrawal preparation and tracking stay authenticated and same-origin',async()=>{
+ const base='projects/11111111-1111-4111-8111-111111111111/collateral';let calls=0;
+ const transport:typeof fetch=async(url)=>{calls++;assert.match(String(url),/\/collateral(?:\/(?:withdraw|submit))?$/);return Response.json({progressive:true});};
+ const req=(path:string,method='GET',origin=env.APP_ORIGIN)=>new Request(env.APP_ORIGIN+'/api/central/'+path,{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})});
+ assert.equal((await centralProxy(req(base),env,transport,session)).status,200);
+ assert.equal((await centralProxy(req(base),env,transport,async()=>Response.json({}))).status,401);
+ for(const action of ['withdraw','submit']){assert.equal((await centralProxy(req(base+'/'+action,'POST','https://attacker.example'),env,transport,session)).status,403);assert.equal((await centralProxy(req(base+'/'+action),env,transport,session)).status,405);assert.equal((await centralProxy(req(base+'/'+action,'POST'),env,transport,session)).status,200);}
+ assert.equal(calls,3);
+});

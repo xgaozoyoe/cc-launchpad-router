@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-08",
+  "status": "development prototype; not deployed; migration not executed",
+  "scope": "V2 new-project collateral core only; migration coordinator, imports and production cutover are planned separately",
+  "new_contract_tests_passed": 9,
+  "fuzz_runs": 256,
+  "all_contract_tests_passed": 27,
+  "frontend_gateway_tests_passed": 52,
+  "v2_integration": "passed: actual Rust + MongoDB replica set + disposable Anvil + HTTP provider fixture",
+  "cases": [
+    "Only burned provider-delivered credits unlock stake",
+    "Proportional cumulative floor accounting",
+    "Replay does not unlock twice",
+    "Provider-only partial withdrawal",
+    "Withdrawals conserve locked + free + returned",
+    "Legacy full release bypass disabled in V2",
+    "Fractional PRL displayed and parsed without floats",
+    "Pending vs finalized withdrawal state",
+    "Partially withdrawn project stays verified and can serve credits"
+  ],
+  "live_action": "Only pinned-block read-only inventory; no contracts, balances or configuration migrated"
+}

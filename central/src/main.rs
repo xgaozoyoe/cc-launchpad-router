@@ -1,6 +1,7 @@
 mod admin;
 mod auth;
 mod catalog;
+mod collateral;
 mod credit_transactions;
 mod credit_worker;
 mod credits;
@@ -204,6 +205,11 @@ async fn dispatch(
     }
     if let Some(action) = path.strip_prefix("/api/v1/admin/") {
         return admin::handle(&app, &identity.user, action, method.as_str(), &body).await;
+    }
+    if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
+        if let Some((id, action)) = rest.split_once("/collateral") {
+            return collateral::handle(&app, owners, id, action, method.as_str(), &body).await;
+        }
     }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
         if let Some((id, action)) = rest.split_once("/deployment") {

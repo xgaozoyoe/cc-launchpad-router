@@ -1,0 +1,2 @@
+export function tokenAmount(raw:string):string {const n=BigInt(raw);const whole=(n/10n**18n).toLocaleString('en-US');const fractional=(n%10n**18n).toString().padStart(18,'0').replace(/0+$/,'');return whole+(fractional?'.'+fractional:'');}
+export function parseTokenAmount(input:string):bigint|null {if(!/^\d+(?:\.\d{1,18})?$/.test(input))return null;const [whole,fraction='']=input.split('.');return BigInt(whole)*10n**18n+BigInt(fraction.padEnd(18,'0'));}

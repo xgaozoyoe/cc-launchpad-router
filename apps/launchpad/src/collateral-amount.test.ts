@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {tokenAmount,parseTokenAmount} from './collateral-amount.ts';
+test('small proportional releases are visible and preserve exact 18-decimal withdrawal units',()=>{assert.equal(tokenAmount('6000000000000000'),'0.006');assert.equal(parseTokenAmount('0.006'),6000000000000000n);assert.equal(tokenAmount('2000000000000000000000'),'2,000');assert.equal(tokenAmount('1'),'0.000000000000000001');});
+test('invalid and fractional-overprecision amounts are rejected without floating point rounding',()=>{for(const s of ['', '-1','1e3','Infinity','0.0000000000000000001'])assert.equal(parseTokenAmount(s),null);assert.equal(parseTokenAmount('0'),0n);});
