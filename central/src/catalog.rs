@@ -26,6 +26,9 @@ pub async fn list(app: &App) -> ApiResult {
     for row in &mut rows {
         let approved = row.remove("capacity_approval").is_some();
         row.insert("capacity_approved", approved);
+        let trial = row.get_str("status").ok() == Some("accepted")
+            && crate::rpc_credentials::trial_enabled(row);
+        row.insert("trial_available", trial);
         row.insert("sales_enabled", false);
     }
     Ok(Json(

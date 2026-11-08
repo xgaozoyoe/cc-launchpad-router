@@ -13,6 +13,8 @@ use std::{
 struct Credential {
     provider_id: String,
     key: String,
+    #[serde(default)]
+    trial_enabled: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -20,6 +22,7 @@ struct Input {
     inference_api_key: Option<String>,
     #[serde(default)]
     revoke: bool,
+    trial_enabled: Option<bool>,
 }
 fn path(id: &str) -> Result<PathBuf, String> {
     if uuid::Uuid::parse_str(id).is_err() {
@@ -51,7 +54,7 @@ pub fn configured() -> bool {
 pub fn valid(key: &str) -> bool {
     (8..=512).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_graphic())
 }
-pub fn load(p: &Document) -> Result<String, String> {
+fn read(p: &Document) -> Result<Credential, String> {
     let file = path(p.get_str("_id").map_err(|_| "Missing project ID")?)?;
     let m = std::fs::symlink_metadata(&file)
         .map_err(|_| "Provider has not authorized platform rechecks")?;
@@ -64,8 +67,22 @@ pub fn load(p: &Document) -> Result<String, String> {
     if p.get_str("provider_id").ok() != Some(secret.provider_id.as_str()) || !valid(&secret.key) {
         return Err("Credential does not match this provider".into());
     }
-    Ok(secret.key)
+    Ok(secret)
 }
+pub fn load(p: &Document) -> Result<String, String> {
+    Ok(read(p)?.key)
+}
+pub fn trial_enabled(p: &Document) -> bool {
+    read(p).is_ok_and(|s| s.trial_enabled)
+}
+pub fn trial_key(p: &Document) -> Result<String, String> {
+    let s = read(p)?;
+    if !s.trial_enabled {
+        return Err("Provider has not enabled prompt trials".into());
+    }
+    Ok(s.key)
+}
+
 pub async fn handle(
     app: &App,
     owners: Vec<String>,
@@ -82,7 +99,7 @@ pub async fn handle(
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
     if method == "GET" {
         return Ok(Json(
-            json!({"storage_available":configured(),"authorized":load(&p).is_ok()}),
+            json!({"storage_available":configured(),"authorized":load(&p).is_ok(),"trial_enabled":trial_enabled(&p)}),
         ));
     }
     if method != "POST" {
@@ -94,7 +111,9 @@ pub async fn handle(
             "Provide inference_api_key or revoke:true",
         )
     })?;
-    if input.revoke == input.inference_api_key.is_some() {
+    if input.revoke && (input.inference_api_key.is_some() || input.trial_enabled.is_some())
+        || !input.revoke && input.inference_api_key.is_none() && input.trial_enabled.is_none()
+    {
         return Err(error(StatusCode::BAD_REQUEST, "Choose save or revoke"));
     }
     let file = path(id).map_err(|e| error(StatusCode::SERVICE_UNAVAILABLE, &e))?;
@@ -110,10 +129,24 @@ pub async fn handle(
             }
         }
     } else {
-        crate::deployment::eligible(app, &p)
-            .await
-            .map_err(|e| error(StatusCode::CONFLICT, &e))?;
-        let key = input.inference_api_key.unwrap_or_default();
+        if input.inference_api_key.is_some() || input.trial_enabled == Some(true) {
+            crate::deployment::eligible(app, &p)
+                .await
+                .map_err(|e| error(StatusCode::CONFLICT, &e))?;
+        }
+        let previous = read(&p).ok();
+        let enabled = input
+            .trial_enabled
+            .unwrap_or(previous.as_ref().is_some_and(|s| s.trial_enabled));
+        let key = input
+            .inference_api_key
+            .or_else(|| previous.map(|s| s.key))
+            .ok_or_else(|| {
+                error(
+                    StatusCode::CONFLICT,
+                    "Save a platform test credential before enabling trials",
+                )
+            })?;
         if !valid(&key) {
             return Err(error(
                 StatusCode::BAD_REQUEST,
@@ -123,6 +156,7 @@ pub async fn handle(
         let secret = Credential {
             provider_id: p.get_str("provider_id").map_err(unavailable)?.into(),
             key,
+            trial_enabled: enabled,
         };
         let temp = file.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
         let write = (|| -> std::io::Result<()> {
@@ -143,8 +177,8 @@ pub async fn handle(
             ));
         }
     }
-    app.db.collection::<Document>("rpc_credential_events").insert_one(doc!{"project_id":id,"actor":owners.first(),"at":crate::now(),"operation":if input.revoke{"revoke"}else{"authorize"}}).await.map_err(unavailable)?;
+    app.db.collection::<Document>("rpc_credential_events").insert_one(doc!{"project_id":id,"actor":owners.first(),"at":crate::now(),"operation":if input.revoke{"revoke"}else{"authorize"},"trial_enabled":trial_enabled(&p)}).await.map_err(unavailable)?;
     Ok(Json(
-        json!({"authorized":!input.revoke,"storage_available":true}),
+        json!({"authorized":!input.revoke,"storage_available":true,"trial_enabled":trial_enabled(&p)}),
     ))
 }

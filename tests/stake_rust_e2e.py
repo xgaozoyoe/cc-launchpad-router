@@ -82,6 +82,7 @@ def run():
    from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
    import threading
    observed_hosts=[]
+   trial_started=threading.Event()
    class Inference(BaseHTTPRequestHandler):
     def do_GET(self):
      observed_hosts.append(self.headers.get('Host'))
@@ -90,6 +91,7 @@ def run():
      self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps({'data':[{'id':'qwen3-8b-awq'}]}).encode())
     def do_POST(self):
      body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+     if body.get('messages',[{}])[-1].get('content')=='slow-trial':trial_started.set();time.sleep(1)
      usage={'prompt_tokens':2,'completion_tokens':3,'total_tokens':5}
      self.send_response(200);self.send_header('Content-Type','text/event-stream' if body.get('stream') else 'application/json');self.end_headers()
      if body.get('stream'):
@@ -133,7 +135,7 @@ def run():
    assert issued['provider_id']==tx_hash and issued['staked_at']==at and issued['rpc_deadline']==at+86400 and issued['stake_finalized'] is True
    directory=api('GET','/api/v1/launchpad',user='bob');public=next(p for p in directory['launches'] if p['_id']==pid)
    assert public['launch_id']==issued['launch_id'] and directory['sales_enabled'] is False
-   assert set(public)<= {'_id','name','model_id','status','launch_id','provider_id','stake_raw','stake_finalized','capacity_approved','progress','sales_enabled'}
+   assert set(public)<= {'_id','name','model_id','status','launch_id','provider_id','stake_raw','stake_finalized','capacity_approved','progress','sales_enabled','trial_available'}
    assert not public['capacity_approved'] and 'account_id' not in public
    import io,tarfile
    api('POST',path+'/deployment/bundle',{},user='bob',expected=404)
@@ -260,6 +262,35 @@ def run():
    assert api('GET',third_path)['project']['status']=='verification-pending'
    rpc('anvil_mine',['0x80'])
    wait(lambda:api('GET',third_path)['project']['status']=='accepted',90)
+   trial_path='/api/v1/launchpad/'+third_id+'/trial'
+   assert not next(p for p in api('GET','/api/v1/launchpad')['launches'] if p['_id']==third_id)['trial_available']
+   api('POST',third_path+'/deployment/rpc-credential',{'inference_api_key':'test-inference-secret'})
+   api('GET',trial_path,user='buyer',expected=409) # recheck custody does not imply public trial consent
+   api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':True},user='buyer',expected=404)
+   assert api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':True})['trial_enabled'] is True
+   info=api('GET',trial_path,user='buyer');assert info['quota']['day_remaining']==10
+   trial=lambda prompt:{'prompt':prompt,'request_id':str(uuid.uuid4())}
+   api('POST',trial_path,{**trial('hello'),'max_tokens':100000},user='buyer',expected=400)
+   api('POST',trial_path,trial('x'*501),user='buyer',expected=400)
+   api('POST','/api/v1/launchpad/'+pid+'/trial',trial('hello'),user='buyer',expected=409) # refunded launch
+   first=trial('A short greeting please')
+   answer=api('POST',trial_path,first,user='buyer');assert answer['text']=='hello' and answer['quota']['day_remaining']==9
+   assert 'test-inference-secret' not in str(answer)
+   api('POST',trial_path,first,user='buyer',expected=409) # no duplicate generation or extra quota
+   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==9
+   api('POST',trial_path,trial('Another greeting'),user='buyer')
+   limited=api('POST',trial_path,trial('Third greeting'),user='buyer',expected=429);assert limited['retry_after_seconds']>0
+   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==8
+   # A separate authenticated buyer has an independent account allowance.
+   assert api('POST',trial_path,trial('Independent buyer'),user='second-buyer')['quota']['day_remaining']==9
+   slow=[]
+   thread=threading.Thread(target=lambda:slow.append(api('POST',trial_path,trial('slow-trial'),user='concurrent-one')));thread.start();assert trial_started.wait(5)
+   api('POST',trial_path,trial('Another simultaneous trial'),user='concurrent-two',expected=429)
+   assert api('GET',trial_path,user='concurrent-two')['quota']['day_remaining']==10
+   thread.join(timeout=10);assert slow[0]['text']=='hello'
+   api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':False})
+   api('POST',trial_path,trial('After revocation'),user='second-buyer',expected=409)
+   assert not next(p for p in api('GET','/api/v1/launchpad')['launches'] if p['_id']==third_id)['trial_available']
    rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
    assert hook(third_login)['reject'] is False
    assert api('GET',third_path)['project']['status']=='accepted'
@@ -267,7 +298,7 @@ def run():
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False
-   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility; private credential consent/revocation and independent wallet-signed admin RPC retests; real launch directory excludes drafts, private approval details, credentials and inactive projects.')
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility; private credential consent/revocation and independent wallet-signed admin RPC retests; real launch directory excludes drafts, private approval details, credentials and inactive projects; real prompt trial consent, quota, input limits, replay prevention and independent account limits.')
   except Exception:
    log.flush();log.seek(0);print(log.read()[-5000:]);raise
   finally:

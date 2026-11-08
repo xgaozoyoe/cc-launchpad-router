@@ -5,6 +5,7 @@ mod deployment;
 mod rpc_check;
 mod rpc_credentials;
 mod stake;
+mod trial;
 use axum::{
     body::Bytes,
     extract::{OriginalUri, State},
@@ -179,6 +180,11 @@ async fn dispatch(
     let owners = account_ids(&app, &identity.user)
         .await
         .map_err(unavailable)?;
+    if let Some(rest) = path.strip_prefix("/api/v1/launchpad/") {
+        if let Some(id) = rest.strip_suffix("/trial") {
+            return trial::handle(&app, &identity.user, id, method.as_str(), &body).await;
+        }
+    }
     if let Some(action) = path.strip_prefix("/api/v1/admin/") {
         return admin::handle(&app, &identity.user, action, method.as_str(), &body).await;
     }
@@ -396,6 +402,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .build(),
         )
         .await?;
+    for collection in ["trial_quotas", "trial_requests"] {
+        db.collection::<Document>(collection)
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! {"expires_at":1})
+                    .options(
+                        IndexOptions::builder()
+                            .expire_after(std::time::Duration::ZERO)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .await?;
+    }
     for field in ["onchain_key", "provider_id", "launch_id"] {
         db.collection::<Document>("projects")
             .create_index(

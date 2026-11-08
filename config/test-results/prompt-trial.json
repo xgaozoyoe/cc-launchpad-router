@@ -1,0 +1,31 @@
+{
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "model_id": "qwen3-8b-awq",
+  "trial_consent_enabled": true,
+  "real_frpc_probe": {
+    "response_received": true,
+    "prompt_tokens": 42,
+    "completion_tokens": 9,
+    "total_tokens": 51,
+    "duration_ms": 331
+  },
+  "browser_flow": {
+    "response_received": true,
+    "prompt_tokens": 38,
+    "completion_tokens": 41,
+    "total_tokens": 79,
+    "remaining_daily_allowance": 9
+  },
+  "anonymous_post_http_status": 401,
+  "limits": {
+    "account_per_minute": 2,
+    "account_per_day": 10,
+    "project_per_hour": 30,
+    "project_per_day": 200,
+    "project_concurrency": 1,
+    "max_prompt_characters": 500,
+    "max_output_tokens": 128
+  },
+  "integration_test": "Passed: consent separation/revocation, input bounds, duplicate prevention, account limits and shared project concurrency",
+  "sales_enabled": false
+}

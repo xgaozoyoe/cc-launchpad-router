@@ -25,3 +25,7 @@ The default app does not initialize or display the simulation reducer. Demo stat
 ## Verification
 
 The Rust/MongoDB/Anvil integration test checks that another signed-in user can read listed launch metadata but not owner project details, that drafts and inactive projects are excluded, and that approvals and credentials do not leak into directory output. Gateway tests cover authenticated GET and rejection of writes. Browser verification checks the actual deployed project, disabled purchase state, real supported model list and the separate Demo navigation.
+
+## Limited real prompt previews
+
+Verified providers can now explicitly enable [real prompt trials](PROMPT-TRIALS.md). The default UI has a Try a model page and project-card entry. Preview responses come from the provider's API through FRPC, with durable account/project limits; they are separate from unfinished paid credit redemption and from the isolated Demo simulation. The directory includes only a boolean `trial_available`.

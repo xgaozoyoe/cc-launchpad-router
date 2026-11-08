@@ -84,3 +84,10 @@ test('real launch directory uses the authenticated read-only backend route',asyn
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/launchpad'),env,transport,async()=>Response.json({}))).status,401);
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/launchpad',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,transport,session)).status,405);
 });
+
+test('real prompt trials require authenticated session and same-origin POST',async()=>{
+ const path='launchpad/11111111-1111-4111-8111-111111111111/trial';const url=env.APP_ORIGIN+'/api/central/'+path;let calls=0;const transport:typeof fetch=async(target)=>{calls++;assert.equal(String(target),env.CENTRAL_API_ORIGIN+'/api/v1/'+path);return Response.json({text:'actual response'});};const req=(origin:string)=>new Request(url,{method:'POST',headers:{origin},body:'{}'});
+ assert.equal((await centralProxy(req('https://attacker.example'),env,transport,session)).status,403);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,session)).status,200);assert.equal(calls,1);
+});
