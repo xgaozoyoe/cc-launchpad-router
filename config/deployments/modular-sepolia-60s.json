@@ -1,0 +1,89 @@
+{
+  "chain_id": 11155111,
+  "status": "inactive target deployed; no legacy funds moved; governance delay not scheduled",
+  "governance_proposer": "0x22b47B6689b34d88b9d259029561692cfD589442",
+  "test_only_single_signer_exception": true,
+  "timelock_seconds": 60,
+  "source_stake": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "source_credits": "0x4c18665f28ac99745edda9b62cf3668ff0f62faf",
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "deployments": [
+    {
+      "name": "LaunchpadTimelock",
+      "address": "0x79443baf29989e37d4f04fa1e4be58ec6d990732",
+      "nonce": "0x14",
+      "estimated_gas": 11035070,
+      "gas_limit": 12690331,
+      "state": "mined",
+      "hash": "0x6f689a1dc4b2e15588b02777d1ccf487cb62b2bb7975b860cd0eced91da540a6",
+      "block": 12090032,
+      "gas_used": 10947022
+    },
+    {
+      "name": "ModuleDeployer",
+      "address": "0xd628bd49b313514311170ccaf9a033e4ce8b5bd4",
+      "nonce": "0x15",
+      "estimated_gas": 6299000,
+      "gas_limit": 7243850,
+      "state": "mined",
+      "hash": "0x83da3d6dda5de24ae357417c5ba4103addef08847fe8a660b1020f465ecc845a",
+      "block": 12090034,
+      "gas_used": 6248244
+    },
+    {
+      "name": "TestnetProtocolFactory",
+      "address": "0x4188f96a18d89225c64ffc783997d3de6cb57e77",
+      "nonce": "0x16",
+      "estimated_gas": 68607567,
+      "gas_limit": 78898703,
+      "state": "mined",
+      "hash": "0x2f32b769b856fefa01d96accc2c170c60c420ffc64cb52fdfe97089a32be0a0f",
+      "block": 12090035,
+      "gas_used": 68046034
+    },
+    {
+      "name": "LegacyMigrationGate",
+      "address": "0x38403bc9d001e7ecb1f92ef988bb6ed66fcc0221",
+      "nonce": "0x17",
+      "estimated_gas": 21827459,
+      "gas_limit": 25101578,
+      "state": "mined",
+      "hash": "0x0249ed7c5688371cb59a1f4acc3888c9215c20746f4b4a752b4edcd0c6753a18",
+      "block": 12090036,
+      "gas_used": 21654431
+    }
+  ],
+  "group": {
+    "id": "sepolia-modular-60s-20261108",
+    "version": "modular-v1",
+    "chain_id": 11155111,
+    "deployment_block": 12090032,
+    "prl_token": "0x3347f108f03287bdb39cba95f40f7f39e6dff1f8",
+    "contracts": {
+      "factory": "0x4188f96a18d89225c64ffc783997d3de6cb57e77",
+      "governance": "0x79443baf29989e37d4f04fa1e4be58ec6d990732",
+      "registry": "0x9db75aace78f3c7051ca7e428b072fb214c77e3f",
+      "credit_token": "0xc49cacef1593af4ccd90223cb6f600166ede5ffe",
+      "usage_escrow": "0x7c6fe78f7387a5f0adbd6024194a37c86834526b",
+      "payment_escrow": "0xf9471f5c5ab7f2aed064acf05393e14555e74e94",
+      "stake_vault": "0x9f49e8fa7467164050cf8c58303bfefec459dcf0",
+      "sale_router": "0xe006b5a666a452cb6d18ea063a0e43b4f5a5d23c",
+      "settlement_module": "0xcbc8f5b43f52618abbbd1def6b407e447a5e9a2f"
+    },
+    "runtime_hashes": {
+      "factory": "0x293f5cde9b45bc0b8f32c6d061b05aa20830621a84bd03c69d66cdc6d49688c3",
+      "governance": "0x79cbd44ba91e5a0fa8a5079559742f253a57d658dedb66872290f9645bd7d8d2",
+      "registry": "0xd2bb3ca0076b67f4d88f38ce6c90cde3c8994ed293ccf2d37637a5124e5a659d",
+      "credit_token": "0x70b26a683605bc46fc22f5cfec49fd1b6e7ecb69e883babd0728c5e7fa4351e7",
+      "usage_escrow": "0xffd5e1a49e2c18ec7ffc51ab2f016b94e08c76368f4e0e6144d6735e0e49d3e0",
+      "payment_escrow": "0x4053bbf6be7548ee0a18bf47cb66a60b663f80a72a6ae1ac7e30966d17b4373e",
+      "stake_vault": "0x69d0d70445143d2b8321c171538df8354200dfcefac533f64ad3d1a9a58a242b",
+      "sale_router": "0xec9fd9f6f66fba3f5f291dee07db3824133a6cc5aebed87e8f9980a78aeb245d",
+      "settlement_module": "0x0960202c8f37cf5117d46a1ec2c8f4a239294c37a88ed91d3df5ffeee5404cb5"
+    },
+    "monitor_enabled": false,
+    "migration_gate": "0x38403bc9d001e7ecb1f92ef988bb6ed66fcc0221",
+    "migration_runtime_hash": "0xc6a2d6323269ed1b9e4db26eb4f87fc9bdaa4d1fea55c459933769f5e799d626"
+  },
+  "runtime_build_comparison": "all component runtimes match reviewed artifacts with immutable offsets accounted for"
+}

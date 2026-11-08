@@ -689,6 +689,19 @@ pub(crate) async fn governance(
     .await
     .map_err(conflict)?;
     let timestamp = abi::uint(&ready_at).map_err(conflict)?;
+    let delay_raw = call(
+        app,
+        &g.contracts["governance"],
+        "getMinDelay()",
+        &[],
+        "finalized",
+    )
+    .await
+    .map_err(conflict)?;
+    let delay = abi::uint(&delay_raw).map_err(conflict)?;
+    if delay != if g.chain_id == 11155111 { 60 } else { 172800 } {
+        return Err(conflict("Unexpected governance delay"));
+    }
     let step = payload["step"].as_str().unwrap_or("");
     let (role, signature, args) = if step == "schedule" {
         if timestamp != 0 {
@@ -705,7 +718,7 @@ pub(crate) async fn governance(
                 configure,
                 zero,
                 salt,
-                "172800".into(),
+                delay.to_string(),
             ],
         )
     } else if step == "execute" {
@@ -757,6 +770,6 @@ pub(crate) async fn governance(
         .await
         .map_err(conflict)?;
     Ok(Json(
-        json!({"transaction":{"from":wallet,"to":g.contracts["governance"],"chainId":format!("0x{:x}",g.chain_id),"value":"0x0","data":data},"governance":g.contracts["governance"],"operation_id":op_id,"ready_at":timestamp,"step":step,"delay_seconds":172800}),
+        json!({"transaction":{"from":wallet,"to":g.contracts["governance"],"chainId":format!("0x{:x}",g.chain_id),"value":"0x0","data":data},"governance":g.contracts["governance"],"operation_id":op_id,"ready_at":timestamp,"step":step,"delay_seconds":delay}),
     ))
 }

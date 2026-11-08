@@ -4,13 +4,13 @@ Reviewed 2026-11-08. Atomic migration and the Rust/API/React path are implemente
 
 ## Recorded inactive Sepolia target
 
-The new target is deployed; [deployment receipts and reviewed runtime hashes](../config/deployments/modular-sepolia.json) are recorded. Group ID: `sepolia-modular-20261108`. Governance: `0x3c82506ee9b4921e93d0fd268fb00882db3dbcbf`; factory: `0xcf8af31eb491fc246db85e66b67680165621312d`; gate: `0xee610081dbc7f590d1a841582b41aab4d42dcd27`. The gate is not installed, the candidate monitor is disabled, no legacy migration permissions have been granted, no source assets moved, and no governance delay has started. Wait for deployment finality before scheduling from Admin review.
+The new target is deployed; [deployment receipts and reviewed runtime hashes](../config/deployments/modular-sepolia-60s.json) are recorded. Group ID: `sepolia-modular-60s-20261108`. Governance: `0x79443baf29989e37d4f04fa1e4be58ec6d990732`; factory: `0x4188f96a18d89225c64ffc783997d3de6cb57e77`; gate: `0x38403bc9d001e7ecb1f92ef988bb6ed66fcc0221`. The gate is not installed, the candidate monitor is disabled, no legacy migration permissions have been granted, no source assets moved, and no governance delay has started. Wait for deployment finality before scheduling from Admin review.
 
-The first Timelock deployment reverted because the local Forge gas estimate was below the node requirement. Recovery regenerated fresh nonce/address simulation, used each node estimate with headroom, and persisted every transaction hash before waiting. All four successful deployments were checked against their expected addresses and compiled runtime artifacts. Future deployments must use node estimation for each creation; do not reuse the local script estimate blindly.
+The superseded 48-hour target’s first Timelock deployment reverted because the local Forge gas estimate was below the node requirement. Recovery regenerated fresh nonce/address simulation, used each node estimate with headroom, and persisted every transaction hash before waiting. All four successful deployments were checked against their expected addresses and compiled runtime artifacts. Future deployments must use node estimation for each creation; do not reuse the local script estimate blindly.
 
 ## Architecture and authorization
 
-The stable contracts are ProjectRegistry, CreditToken, UsageEscrow, PaymentEscrow and StakeVault. SaleRouter and SettlementModule hold no user funds. Fixed peer references cannot be rebound; module role changes require the 48-hour LaunchpadTimelock. The factory can install one fixed migration gate once, through that Timelock.
+The stable contracts are ProjectRegistry, CreditToken, UsageEscrow, PaymentEscrow and StakeVault. SaleRouter and SettlementModule hold no user funds. Fixed peer references cannot be rebound; module role changes require the fixed per-chain LaunchpadTimelock delay: Sepolia 60 seconds, other chains 48 hours. The factory can install one fixed migration gate once, through that Timelock.
 
 For Sepolia only, the user explicitly approved single-wallet proposer/executor `0x22b47B6689b34d88b9d259029561692cfD589442`. It is also the test verifier/guardian. This is not production multisig governance. The backend prepares fixed, reviewed transactions; governance, migration commitment and provider withdrawals require human browser-wallet confirmation. Backend admin actions verify fresh, account-bound wallet signatures.
 
@@ -19,7 +19,7 @@ For Sepolia only, the user explicitly approved single-wallet proposer/executor `
 ## Sequence
 
 1. Deploy and review the inactive target, source/target peers, runtime hashes and roles. Stage it through `PROTOCOL_GROUPS_FILE`; preserve legacy chain/credit configuration. Set `monitor_enabled: false` while awaiting gate installation.
-2. In Admin review, prepare **Schedule migration gate**. Confirm the fixed factory `configureMigration(gate)` Timelock operation in the approved wallet. The 48-hour delay starts when that transaction is mined, not when the backend prepares it. After readiness, execute that same operation and wait for finality.
+2. In Admin review, prepare **Schedule migration gate**. Confirm the fixed factory `configureMigration(gate)` Timelock operation in the approved wallet. The 60-second Sepolia delay starts when that transaction is mined, not when the backend prepares it. After readiness, execute that same operation and wait for finality.
 3. Enable the candidate monitor before freezing. Check finalized group audit, code hashes, gate bindings and operator role. The manifest digest becomes the ledger identity once monitored; do not silently edit an active manifest.
 4. Freeze the selected V1 project through the signed admin action. Drain inference, reserved requests, unsettled burns and pending withdrawals. Old service stays available for unrelated projects. Single-supervisor deployment must stop the old settlement worker before starting its replacement; mixed-version rolling workers are not supported.
 5. Reconcile **every historical holder**, including fully consumed accounts. The UI roster is a hint, not authoritative completeness evidence. All issued credits must reconcile to escrow remaining plus real historical burns; external wallet token balances and outstanding withdrawals must be zero.
@@ -53,11 +53,15 @@ After commitment there is no safe database-only rollback. Preserve receipts and 
 
 ## Test evidence
 
-- 58 Foundry tests: migration completeness, consent/tampering/expiry, atomic rollback, issuance/reserve/delivery conservation and modular access/accounting.
+- 60 Foundry tests (including Sepolia 60s, production 48h and early-execution/fixed-delay checks): migration completeness, consent/tampering/expiry, atomic rollback, issuance/reserve/delivery conservation and modular access/accounting.
 - 19 Rust unit tests passed; one dedicated Mongo unit test ignored by the unit runner, with Mongo exercised by the integration suite.
 - 54 frontend/gateway tests passed; TypeScript, server verification and production build checked.
-- Full Rust + MongoDB + Anvil integration: 48h governance scheduling/early rejection/execution, V1 freeze, holder signature, simulated atomic commit, finalized per-project activation, new purchase/reservation, authenticated HTTP inference, cached retry, durable burn and proportional PRL withdrawal. Legacy finality/reorg and owner/admin isolation regressions also passed.
+- Full Rust + MongoDB + Anvil integration: local 48h governance scheduling/early rejection/execution, V1 freeze, holder signature, simulated atomic commit, finalized per-project activation, new purchase/reservation, authenticated HTTP inference, cached retry, durable burn and proportional PRL withdrawal. Legacy finality/reorg and owner/admin isolation regressions also passed.
 
 Local HTTP inference uses an authenticated fixture; it is not a GPU capacity benchmark or external security audit. Actual Sepolia migration still requires live finality, holder consents and provider prerequisites.
 
 Machine-readable local evidence: [modular-migration.json](../config/test-results/modular-migration.json).
+
+### Sepolia test-delay correction
+
+The original inactive 48-hour target is superseded by the 60-second test deployment. Its historical receipts remain recorded, but the backend candidate selects only the new target. Any schedule on the old Timelock does not configure the new target; use the new group shown in Admin review. No existing source assets are migrated by this replacement. Backend transaction preparation reads `getMinDelay()` from the deployed contract and validates the chain-specific policy. The UI no longer hard-codes a 48-hour schedule label.

@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-08",
+  "contracts_passed": 60,
+  "rust_unit_passed": 19,
+  "rust_unit_ignored": 1,
+  "frontend_gateway_passed": 54,
+  "production_build": "passed",
+  "runtime_build_comparison": "passed",
+  "sepolia_getMinDelay": 60,
+  "production_policy_seconds": 172800,
+  "new_group": "sepolia-modular-60s-20261108",
+  "legacy_assets_moved": false,
+  "governance_scheduled_by_agent": false
+}

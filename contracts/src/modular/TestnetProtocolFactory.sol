@@ -47,9 +47,9 @@ contract TestnetProtocolFactory {
     ) {
         require(block.chainid == 11155111 || block.chainid == 31337, "Test networks only");
         require(
-            address(governor).code.length > 0 && governor.getMinDelay() >= 48 hours
-                && governor.MINIMUM_DELAY() == 48 hours,
-            "48h governance required"
+            address(governor).code.length > 0 && governor.getMinDelay() == (block.chainid == 11155111 ? 60 seconds : 48 hours)
+                && governor.MINIMUM_DELAY() == (block.chainid == 11155111 ? 60 seconds : 48 hours),
+            "Wrong chain-specific governance delay"
         );
         require(
             registrar != address(0) && verifier != address(0) && guardian != address(0) && operator != address(0),

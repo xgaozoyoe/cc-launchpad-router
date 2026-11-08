@@ -2,36 +2,36 @@
   "schema_version": 1,
   "candidates": [
     {
-      "id": "sepolia-modular-20261108",
+      "id": "sepolia-modular-60s-20261108",
       "version": "modular-v1",
       "chain_id": 11155111,
-      "deployment_block": 12089763,
+      "deployment_block": 12090032,
       "prl_token": "0x3347f108f03287bdb39cba95f40f7f39e6dff1f8",
       "contracts": {
-        "factory": "0xcf8af31eb491fc246db85e66b67680165621312d",
-        "governance": "0x3c82506ee9b4921e93d0fd268fb00882db3dbcbf",
-        "registry": "0xa83fa9245f215ff2db4d04b69ddb830d8c607e45",
-        "credit_token": "0xd9f0740e58c293b06ff847d829ae054ff28c4791",
-        "usage_escrow": "0xcf29b72dae164c9a2abc199d8c4c0e84037b9a62",
-        "payment_escrow": "0xe55c36bce7341a7ce5fa18825965059509fba910",
-        "stake_vault": "0x683f75fd3267db9fb672f40a562da1a2eec92ace",
-        "sale_router": "0x919393d6f7d79e9fdde7ddad93488d7bf4905c40",
-        "settlement_module": "0xf13ef1d7f94eb2d534e9956725b67170896f1a50"
+        "factory": "0x4188f96a18d89225c64ffc783997d3de6cb57e77",
+        "governance": "0x79443baf29989e37d4f04fa1e4be58ec6d990732",
+        "registry": "0x9db75aace78f3c7051ca7e428b072fb214c77e3f",
+        "credit_token": "0xc49cacef1593af4ccd90223cb6f600166ede5ffe",
+        "usage_escrow": "0x7c6fe78f7387a5f0adbd6024194a37c86834526b",
+        "payment_escrow": "0xf9471f5c5ab7f2aed064acf05393e14555e74e94",
+        "stake_vault": "0x9f49e8fa7467164050cf8c58303bfefec459dcf0",
+        "sale_router": "0xe006b5a666a452cb6d18ea063a0e43b4f5a5d23c",
+        "settlement_module": "0xcbc8f5b43f52618abbbd1def6b407e447a5e9a2f"
       },
       "runtime_hashes": {
-        "factory": "0x507a775b1114033a3fb931dd2c6fa690fb623f32b864c3eead5c185625edc30a",
-        "governance": "0xf35cb481de64791d5ddb0428377bbabe66f7a7afbb96ec6e86156b0cb3175862",
-        "registry": "0x866942052949a2b2068b1bb73dcfeb84e43a5f11cf084225eff1ff4bfa088724",
-        "credit_token": "0x958ec5e0dce061b60b6d4101bba3a0f6766462647c0503b3aef7a524f5751f91",
-        "usage_escrow": "0x63fb9296de8b383701b9e1883c99f8238325ba733bf194de5bcb921d0471f1d5",
-        "payment_escrow": "0x8682fba98bf8bb1941058c906cf7723db7586b538d52f560c331a8c33f331a2d",
-        "stake_vault": "0x5223b432b68443084fa481037fa112872baaed67197896eccc0c531a4601bec7",
-        "sale_router": "0x50d866927378c82689903d625dfbde2860dd315256bcc890f52f1295bdccf62d",
-        "settlement_module": "0x4f7debd4c4563b75a5b0e9b851ccf68d2024d5ed5f20e04cb63f1758bd2a800b"
+        "factory": "0x293f5cde9b45bc0b8f32c6d061b05aa20830621a84bd03c69d66cdc6d49688c3",
+        "governance": "0x79cbd44ba91e5a0fa8a5079559742f253a57d658dedb66872290f9645bd7d8d2",
+        "registry": "0xd2bb3ca0076b67f4d88f38ce6c90cde3c8994ed293ccf2d37637a5124e5a659d",
+        "credit_token": "0x70b26a683605bc46fc22f5cfec49fd1b6e7ecb69e883babd0728c5e7fa4351e7",
+        "usage_escrow": "0xffd5e1a49e2c18ec7ffc51ab2f016b94e08c76368f4e0e6144d6735e0e49d3e0",
+        "payment_escrow": "0x4053bbf6be7548ee0a18bf47cb66a60b663f80a72a6ae1ac7e30966d17b4373e",
+        "stake_vault": "0x69d0d70445143d2b8321c171538df8354200dfcefac533f64ad3d1a9a58a242b",
+        "sale_router": "0xec9fd9f6f66fba3f5f291dee07db3824133a6cc5aebed87e8f9980a78aeb245d",
+        "settlement_module": "0x0960202c8f37cf5117d46a1ec2c8f4a239294c37a88ed91d3df5ffeee5404cb5"
       },
       "monitor_enabled": false,
-      "migration_gate": "0xee610081dbc7f590d1a841582b41aab4d42dcd27",
-      "migration_runtime_hash": "0x5c0165ec2bf8515acfe1ea714d053d886d97eebebf92e3c9d233dffb3726cb86"
+      "migration_gate": "0x38403bc9d001e7ecb1f92ef988bb6ed66fcc0221",
+      "migration_runtime_hash": "0xc6a2d6323269ed1b9e4db26eb4f87fc9bdaa4d1fea55c459933769f5e799d626"
     }
   ]
 }

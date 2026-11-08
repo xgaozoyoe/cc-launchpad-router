@@ -490,3 +490,20 @@ contract ModularProtocolTest {
         require(locked + consumed == 1000 && consumed == d);
     }
 }
+
+contract GovernanceDelayPolicyTest {
+ ModularVm constant vm = ModularVm(address(uint160(uint256(keccak256("hevm cheat code")))));
+ function check(uint256 chain,uint256 delay) private {
+  vm.chainId(chain);address[] memory people=new address[](1);people[0]=address(this);
+  LaunchpadTimelock gov=new LaunchpadTimelock(people,people);
+  require(gov.getMinDelay()==delay && gov.MINIMUM_DELAY()==delay);
+  bytes memory data=abi.encodeWithSignature("updateDelay(uint256)",uint256(0));bytes32 salt=keccak256(abi.encode(chain));
+  vm.expectRevert();gov.schedule(address(gov),0,data,0,salt,delay-1);
+  gov.schedule(address(gov),0,data,0,salt,delay);
+  vm.warp(block.timestamp+delay-1);vm.expectRevert();gov.execute(address(gov),0,data,0,salt);
+  vm.warp(block.timestamp+1);vm.expectRevert();gov.execute(address(gov),0,data,0,salt);
+  require(gov.getMinDelay()==delay);
+ }
+ function testSepoliaFixedSixtySeconds() public {check(11155111,60);}
+ function testProductionFixedFortyEightHours() public {check(1,48 hours);}
+}

@@ -15,7 +15,7 @@ All new contracts are under `contracts/src/modular/`; V1 and the earlier progres
 | StakeVault | PRL principal, withdrawals, proportional Free | Provider stakes/withdraws; reads fixed UsageEscrow delivery |
 | SaleRouter | No retained funds or balances | Buyer transaction forwards all ETH |
 | SettlementModule | No retained funds or balances | Trusted operator submits provider receipt or known failure |
-| LaunchpadTimelock / GovernedAccess | Fixed 48h governance / pinned role administrator | Reviewed proposer/executor, expected to be multisig for deployment |
+| LaunchpadTimelock / GovernedAccess | Fixed Sepolia 60s / other chains 48h governance / pinned role administrator | Reviewed proposer/executor, expected to be multisig for deployment |
 | TestnetProtocolFactory | Sealed address manifest, no admin left | Constructor bootstrap plus one-time timelocked migration-gate binding; chain 31337 or 11155111 |
 
 The factory accepts an already deployed LaunchpadTimelock and PRL token, then deploys all peers, binds them once and seals role administration. A factory getter continues to identify the **initial** router/module after rotation; current authorization is determined by stable-contract role events, not by treating the initial getter as an active-module registry. `DeployModular.s.sol` deploys an inactive testnet target. It grants no legacy migration roles and moves no legacy assets. `LegacyMigrationGate` imports one fixed project atomically after timelocked installation, exact provider allowance/prefund and every historical holder’s consent.

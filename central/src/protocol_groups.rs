@@ -272,8 +272,10 @@ pub(crate) async fn audit(app: &App, g: &Group) -> Result<Value, String> {
         return Err("Configured settler is not a modular operator".into());
     }
     let delay=rpc.rpc("eth_call",json!([{"to":g.contracts["governance"],"data":credits::data("getMinDelay()",&[])},number])).await?;
-    if credits::uint(delay.as_str().ok_or("Invalid governance delay")?)? != 172800 {
-        return Err("Expected fixed 48-hour governance delay".into());
+    if credits::uint(delay.as_str().ok_or("Invalid governance delay")?)?
+        != if g.chain_id == 11155111 { 60 } else { 172800 }
+    {
+        return Err("Unexpected chain-specific governance delay".into());
     }
     if let (Some(gate), Some(expected_hash)) = (&g.migration_gate, &g.migration_runtime_hash) {
         let raw = rpc.rpc("eth_getCode", json!([gate, number])).await?;
@@ -357,7 +359,7 @@ pub async fn report(app: &App) -> Value {
         rows.push(json!({"monitor_error":monitor_error,"monitor":monitor,"monitor_enabled":g.monitor_enabled,"id":g.id,"version":g.version,"chain_id":g.chain_id,"contracts":g.contracts,"validation":validation}));
     }
     json!({"phase":if rows.is_empty(){"preparing"}else{"staged"},"can_activate":false,"legacy_staking_contract":s.config.staking_contract,"candidates":rows,
-      "blockers":["Install and finalize the reviewed migration gate through 48-hour governance","Freeze the source project and obtain every holder consent for a fresh checkpoint","Fund the exact replacement reserve and provider PRL allowance before atomic commit","Activate only after canonical commit finality and per-group monitor reconciliation"],
+      "blockers":["Install and finalize the reviewed migration gate through the configured governance delay (Sepolia: 60 seconds)","Freeze the source project and obtain every holder consent for a fresh checkpoint","Fund the exact replacement reserve and provider PRL allowance before atomic commit","Activate only after canonical commit finality and per-group monitor reconciliation"],
       "note":"Legacy contracts remain active. A successful bytecode/binding audit does not authorize activation or move funds."})
 }
 #[cfg(test)]
