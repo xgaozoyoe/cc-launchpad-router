@@ -39,3 +39,5 @@
 .deployment-inventory{width:100%;border-collapse:collapse;margin:20px 0;text-align:left}.deployment-inventory th,.deployment-inventory td{padding:14px 10px;border-bottom:1px solid #dce5e0;vertical-align:top}.deployment-inventory th{font-weight:600;color:#4f6e60}
 
 .deployment-console{font-size:15px;line-height:1.65}.deployment-console h2{font-size:30px;font-weight:650;line-height:1.2;margin:12px 0 18px}.deployment-console h3{font-size:20px;font-weight:600;margin:18px 0 10px}
+
+.admin-categories{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}.admin-categories button{min-height:48px}
