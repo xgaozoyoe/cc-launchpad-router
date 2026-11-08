@@ -113,7 +113,7 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         .ok_or_else(|| denied("Chain is not configured"))?;
     if action == "challenge" {
         let intent = text(&input, "intent")?;
-        if !["login", "capacity", "prepare", "submit"].contains(&intent) {
+        if !["login", "capacity", "prepare", "submit", "retest"].contains(&intent) {
             return Err(denied("Unknown admin operation"));
         }
         let payload = input.get("payload").cloned().unwrap_or(json!({}));
@@ -144,6 +144,12 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         crate::project_progress(app, &mut rows)
             .await
             .map_err(unavailable)?;
+        for p in &mut rows {
+            p.insert(
+                "rpc_retest_available",
+                crate::rpc_credentials::load(p).is_ok(),
+            );
+        }
         return Ok(Json(
             json!({"projects":rows,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract,"sales_enabled":false}),
         ));
@@ -212,6 +218,11 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         .await
         .map_err(unavailable)?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
+    if action == "retest" {
+        let key = crate::rpc_credentials::load(&p).map_err(|e| error(StatusCode::CONFLICT, &e))?;
+        app.db.collection::<Document>("admin_audit").insert_one(doc!{"project_id":project,"operation":"rpc-retest","wallet":&wallet,"account":user,"at":now(),"challenge_id":id}).await.map_err(unavailable)?;
+        return crate::rpc_check::run(app, &p, key).await;
+    }
     if action == "capacity" {
         ready(app, &p).await?;
         let reason = text(&payload, "reason")?.trim();

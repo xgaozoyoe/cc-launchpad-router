@@ -98,7 +98,7 @@ def run():
       self.wfile.write(b'data: [DONE]\n\n')
      else:self.wfile.write(json.dumps({'choices':[{'message':{'content':'hello'},'finish_reason':'stop'}],'usage':usage}).encode())
     def log_message(self,*_):pass
-   inference=ThreadingHTTPServer(('127.0.0.1',0),Inference);threading.Thread(target=inference.serve_forever,daemon=True).start();env['RPC_CHECK_PORT']=str(inference.server_port);env['ADMIN_WALLET_ADDRESS']=admin
+   inference=ThreadingHTTPServer(('127.0.0.1',0),Inference);threading.Thread(target=inference.serve_forever,daemon=True).start();env['RPC_CHECK_PORT']=str(inference.server_port);env['ADMIN_WALLET_ADDRESS']=admin;env['RPC_CREDENTIAL_DIR']=str(tmp/'rpc-credentials')
    backend=start([str(BIN/'cc-central')],env)
    wait(lambda:urllib.request.urlopen(api_url+'/healthz',timeout=1).status==200)
    legacy=str(uuid.uuid4())
@@ -179,6 +179,22 @@ def run():
    api('POST','/api/v1/admin/query',{'token':session['token']},user='bob',expected=403)
    admin_sign('prepare',{'project_id':pid},expected=403) # missing VERIFIER_ROLE / capacity
    admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True},provider.key,expected=403)
+   admin_sign('retest',{'project_id':pid},expected=409) # no publisher consent yet
+   api('POST',path+'/deployment/rpc-credential',{'inference_api_key':'test-inference-secret'},user='bob',expected=404)
+   consent=api('POST',path+'/deployment/rpc-credential',{'inference_api_key':'test-inference-secret'})
+   assert consent['authorized'] is True and 'test-inference-secret' not in str(consent)
+   assert api('GET',path+'/deployment/rpc-credential')['authorized'] is True
+   private_file=tmp/'rpc-credentials'/f'{pid}.json';assert private_file.stat().st_mode&0o077==0
+   assert next(p for p in api('POST','/api/v1/admin/query',{'token':session['token']})['projects'] if p['_id']==pid)['rpc_retest_available'] is True
+   admin_sign('retest',{'project_id':pid},provider.key,expected=403)
+   time.sleep(11)
+   # Different Google account, correct admin wallet: no publisher login/key required.
+   retested,_=admin_sign('retest',{'project_id':pid},user='platform-reviewer')
+   assert retested['report']['status']=='passed' and 'test-inference-secret' not in str(retested)
+   api('POST',path+'/deployment/rpc-credential',{'revoke':True})
+   assert not private_file.exists()
+   admin_sign('retest',{'project_id':pid},expected=409)
+   assert api('GET',path+'/deployment/rpc-credential')['authorized'] is False
    approved,proof=admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True})
    assert approved['benchmarked'] is False and approved['sales_enabled'] is False
    api('POST','/api/v1/admin/capacity',proof,expected=403)
@@ -241,7 +257,7 @@ def run():
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False
-   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility.')
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility; private credential consent/revocation and independent wallet-signed admin RPC retests.')
   except Exception:
    log.flush();log.seek(0);print(log.read()[-5000:]);raise
   finally:

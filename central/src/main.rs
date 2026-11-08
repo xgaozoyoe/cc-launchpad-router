@@ -2,6 +2,7 @@ mod admin;
 mod auth;
 mod deployment;
 mod rpc_check;
+mod rpc_credentials;
 mod stake;
 use axum::{
     body::Bytes,
@@ -182,6 +183,9 @@ async fn dispatch(
     }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
         if let Some((id, action)) = rest.split_once("/deployment") {
+            if action == "/rpc-credential" {
+                return rpc_credentials::handle(&app, owners, id, method.as_str(), &body).await;
+            }
             if action == "/rpc-check" {
                 return rpc_check::handle(&app, owners, id, action, method.as_str(), &body).await;
             }

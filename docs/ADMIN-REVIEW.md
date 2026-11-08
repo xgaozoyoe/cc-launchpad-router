@@ -29,8 +29,18 @@ Read-only review sessions expire after 15 minutes, are bound to account and admi
 
 Collections: `admin_challenges`, `admin_sessions` (hashed tokens), `admin_audit` (append-only decisions). Project fields include `capacity_approval`, `verification_tx_hash`, and statuses `verification-pending` / `accepted`. These collections contain no private keys. Expired challenge/session records are rejected by timestamp even if retained in the database.
 
-Routes: `challenge`, `authenticate`, `query`, `capacity`, `prepare`, `submit`. Mutation bodies contain `challenge_id` and `signature`; action payloads are provided when requesting the challenge. Only `query` accepts the read session token.
+Routes: `challenge`, `authenticate`, `query`, `capacity`, `prepare`, `submit`, `retest`. Mutation bodies contain `challenge_id` and `signature`; action payloads are provided when requesting the challenge. Only `query` accepts the read session token.
 
 ## Verification
 
 `tests/stake_rust_e2e.py` runs a disposable Anvil/MongoDB/backend stack. It covers non-admin signatures, replay, altered approval text, account-bound sessions, missing prerequisites/roles, browser-style transaction preparation, chain finality, and accepted-tunnel eligibility after the deadline. It spends no Sepolia funds. Frontend tests also cover gateway session/Origin guards and accepted-but-not-selling dashboard state.
+
+## Admin RPC rechecks
+
+Admins use **Retest RPC · sign admin authorization** on the review card. This is the signed `retest` operation with `{project_id}`; it does not impersonate the publisher. The same one-use challenge binds the admin wallet, account, origin, project, chain and operation. The backend loads the project-bound credential and invokes the same bounded probes, stake eligibility checks, project lease and cooldown as owner-initiated checks. It saves the same sanitized report and a secret-free `rpc-retest` admin audit event. No approval or blockchain transaction is performed by a recheck.
+
+The publisher authorizes custody once in provider setup: check **Allow platform rechecks**, enter the inference key and run Test RPC. After a successful test, the UI saves it through owner-only `POST /projects/<id>/deployment/rpc-credential`. Unchecked tests remain one-time use. Owners can rotate by saving a new key, inspect an authorization boolean via GET, or revoke with POST `{revoke:true}` even after project expiry. Revocation prevents subsequent rechecks; a probe already in flight can finish within its existing 45-second bound.
+
+Set `RPC_CREDENTIAL_DIR` to an absolute operator-private directory (0700), under the project’s private root. Keys are stored as atomic 0600 files, bound to the project UUID and Provider ID; a credential for one provider cannot be reused after identity changes. Symlink files, oversized/invalid files and group/world-accessible files/directories are rejected. Missing configuration fails closed. This is filesystem protection, **not application-level encryption at rest**; host operators and private backups must be trusted. Neither normal project responses, admin listings, probe reports nor MongoDB audit records return the key. `rpc_credential_events` records owner authorize/revoke actions without secret values. A provider should use a dedicated restricted inference credential where its server supports one; the platform must be trusted with the permissions that credential carries.
+
+Admin listings return only `rpc_retest_available`. A missing credential requires the publisher’s one-time authorization, not switching the admin into the publisher’s account. The already hosted demo provider can be enrolled by its operator without exposing the key in the browser.

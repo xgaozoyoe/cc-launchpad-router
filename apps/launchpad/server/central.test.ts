@@ -69,3 +69,11 @@ test('admin signature routes retain session and origin protection',async()=>{
  assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,async()=>Response.json({}))).status,401);
  assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,session)).status,403);
 });
+
+test('admin rechecks and provider credential custody require session and origin',async()=>{
+ const paths=['admin/retest','projects/11111111-1111-4111-8111-111111111111/deployment/rpc-credential'];
+ for(const path of paths){const req=(origin:string)=>new Request(env.APP_ORIGIN+'/api/central/'+path,{method:'POST',headers:{origin},body:'{}'});let called=0;const transport:typeof fetch=async(url)=>{called++;assert.equal(String(url),env.CENTRAL_API_ORIGIN+'/api/v1/'+path);return Response.json({authorized:true});};
+ assert.equal((await centralProxy(req('https://attacker.example'),env,transport,session)).status,403);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,session)).status,200);assert.equal(called,1);}
+});

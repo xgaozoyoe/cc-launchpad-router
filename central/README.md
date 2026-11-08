@@ -19,3 +19,5 @@ The optional MongoDB-only test uses a disposable replica set on port 27187 (`car
 ## Functional API verification
 
 `rpc_check.rs` provides owner-only saved functional checks over the assigned FRPS route using a one-time inference key. It uses bounded responses, deadlines and a project lease/cooldown. It never stores the inference key or prompt/output and never changes the project's acceptance/sale state. See [RPC checks](../docs/RPC-CHECKS.md). The additional collection is `rpc_checks`.
+
+`rpc_credentials.rs` adds explicit owner-authorized, revocable private file custody for platform RPC rechecks (`RPC_CREDENTIAL_DIR`). Signed admins use `admin/retest` without a publisher account or browser-visible API key. Probe results still contain no key. See [admin rechecks and custody](../docs/ADMIN-REVIEW.md#admin-rpc-rechecks).

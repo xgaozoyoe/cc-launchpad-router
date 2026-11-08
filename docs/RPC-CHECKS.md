@@ -34,3 +34,7 @@ There is one MongoDB-backed test lease per project, bounded response sizes, HTTP
 ## Launch-card progress
 
 Owner-filtered project list/detail responses include only sanitized progress fields (`bundle_issued`, `last_proxy_at`, `rpc_status`, `rpc_checked_at`) joined from deployment and saved-check records. Credentials and report bodies are not copied into project records. The dashboard shows completed steps green, the current step yellow and later steps red, with matching text/symbols. Inactive projects have blocked incomplete steps and no active yellow step. A saved API pass changes the display to awaiting capacity acceptance and shows its test time; it does not change `awaiting-rpc`, verify capacity or open sales. Connector registration and test ticks are historical evidence, not continuous health.
+
+## Optional platform custody and admin rechecks
+
+The original one-time key behavior remains the default. Providers may now explicitly authorize private backend storage for future checks and revoke it in setup. An admin can then sign **Retest RPC** directly from review without using the publisher’s account or seeing its key. Both entry points use the same probes, leases, cooldown, saved results and chain eligibility. See [credential storage, consent and limitations](ADMIN-REVIEW.md#admin-rpc-rechecks). The recheck does not approve capacity or submit `verifyProject`.

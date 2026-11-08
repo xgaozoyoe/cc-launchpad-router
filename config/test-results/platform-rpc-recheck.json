@@ -1,0 +1,16 @@
+{
+  "chain_id": 11155111,
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "provider_id": "0x1d5039ab918853807c7640af2da60613033b22d7b3ae231bbf8f20bf7b7ba449",
+  "model_id": "qwen3-8b-awq",
+  "platform_credential_authorized": true,
+  "live_smoke_test": {
+    "trigger": "operator enrollment using project owner authorization",
+    "status": "passed",
+    "checks": 7,
+    "checked_at": 1794101646
+  },
+  "admin_retest_integration_test": "Passed with a different account and correct admin EOA on disposable Anvil; wrong wallet and revoked custody rejected",
+  "project_approved": false,
+  "sales_enabled": false
+}

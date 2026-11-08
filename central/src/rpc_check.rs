@@ -201,13 +201,13 @@ pub async fn handle(
     }
     let input: Input = serde_json::from_slice(body)
         .map_err(|_| error(StatusCode::BAD_REQUEST, "Provide only inference_api_key"))?;
-    if input.inference_api_key.len() < 8
-        || input.inference_api_key.len() > 512
-        || !input
-            .inference_api_key
-            .bytes()
-            .all(|b| b.is_ascii_graphic())
-    {
+    run(app, &p, input.inference_api_key).await
+}
+// Both callers have already established owner/admin authorization; all probes and leases are shared.
+pub(crate) async fn run(app: &App, p: &Document, key: String) -> ApiResult {
+    let id = p.get_str("_id").map_err(unavailable)?;
+    let reports = app.db.collection::<Document>("rpc_checks");
+    if !crate::rpc_credentials::valid(&key) {
         return Err(error(
             StatusCode::BAD_REQUEST,
             "Invalid inference API key format",
@@ -266,14 +266,14 @@ pub async fn handle(
     let mut checks = vec![];
     let result = match tokio::time::timeout(
         std::time::Duration::from_secs(45),
-        probes(&host, &input.inference_api_key, &mut checks),
+        probes(&host, &key, &mut checks),
     )
     .await
     {
         Ok(r) => r,
         Err(_) => Err("RPC check timed out".into()),
     };
-    drop(input);
+    drop(key);
     let result = if result.is_ok() {
         crate::deployment::eligible(app, &p)
             .await
