@@ -1033,3 +1033,43 @@ pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult 
         json!({"group_id":g.id,"stage":stage,"deployment_verified":true,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
     ))
 }
+
+/// Validate the fixed gate/project before asking the human for any wallet signature.
+pub(crate) async fn validate_project(app: &App, payload: &Value) -> Result<(), String> {
+    let id = payload["project_id"].as_str().ok_or("Missing project_id")?;
+    let group = payload["group_id"].as_str().ok_or("Missing group_id")?;
+    let g = protocol_groups::select(app, group)?;
+    let gate = g.migration_gate.as_deref().ok_or("No migration gate")?;
+    let actual = call(app, gate, "projectId()", &[], "latest").await?;
+    if !project_matches(id, &actual) {
+        return Err("This asset record is not covered by the selected deployment target. Refresh the deployment inventory.".into());
+    }
+    Ok(())
+}
+pub(crate) async fn target_key(app: &App, g: &protocol_groups::Group) -> Result<String, String> {
+    call(
+        app,
+        g.migration_gate.as_deref().ok_or("No migration gate")?,
+        "projectId()",
+        &[],
+        "latest",
+    )
+    .await
+}
+
+pub(crate) fn project_matches(id: &str, key: &str) -> bool {
+    stake::project_key(id).eq_ignore_ascii_case(key)
+}
+#[cfg(test)]
+mod project_binding_tests {
+    use super::project_matches;
+    #[test]
+    fn migration_target_matches_only_its_original_project() {
+        let key = "0x35f8686baa273624e8bdd09f73363ad47fbab9392cde162cc17c34026b26aa2e";
+        assert!(project_matches("076d4cfc-3b2c-4b51-999b-32b88b7a41b5", key));
+        assert!(!project_matches(
+            "8e73f5b7-24c8-4e8c-a14a-e6d71bfd7d62",
+            key
+        ));
+    }
+}

@@ -36,3 +36,6 @@
 .migration-feedback,.migration-tx{border:1px solid #d9e3df;border-radius:12px;background:#f5f8f6;padding:18px;margin:16px 0;overflow-wrap:anywhere}.migration-feedback p{margin:8px 0}.migration-feedback-warning{background:#fff7e4;border-color:#e6ce8a}.migration-feedback-success{background:#edf6ef;border-color:#a7cbb1}.migration-tx{display:grid;gap:8px}
 
 .migration-feedback-current{background:#fff8e8;border-color:#e4cd8d}.migration-feedback-failure{background:#fff0ed;border-color:#dba59c}
+.deployment-inventory{width:100%;border-collapse:collapse;margin:20px 0;text-align:left}.deployment-inventory th,.deployment-inventory td{padding:14px 10px;border-bottom:1px solid #dce5e0;vertical-align:top}.deployment-inventory th{font-weight:600;color:#4f6e60}
+
+.deployment-console{font-size:15px;line-height:1.65}.deployment-console h2{font-size:30px;font-weight:650;line-height:1.2;margin:12px 0 18px}.deployment-console h3{font-size:20px;font-weight:600;margin:18px 0 10px}

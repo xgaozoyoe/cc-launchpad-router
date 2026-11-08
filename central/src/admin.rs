@@ -131,6 +131,11 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             return Err(denied("Unknown admin operation"));
         }
         let payload = input.get("payload").cloned().unwrap_or(json!({}));
+        if intent.starts_with("migration-") {
+            crate::migration::validate_project(app, &payload)
+                .await
+                .map_err(|e| denied(&e))?;
+        }
         let payload_json = serde_json::to_string(&payload).map_err(unavailable)?;
         let id = uuid::Uuid::new_v4().to_string();
         let expiry = now() + 300;
@@ -164,6 +169,45 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         crate::project_progress(app, &mut rows)
             .await
             .map_err(unavailable)?;
+        let groups = crate::protocol_groups::load(s.config.chain_id).unwrap_or_default();
+        for group in &groups {
+            if let Ok(key) = crate::migration::target_key(app, group).await {
+                for p in &mut rows {
+                    if p.get_str("_id")
+                        .ok()
+                        .is_some_and(|id| crate::migration::project_matches(id, &key))
+                    {
+                        p.insert("migration_available_group", group.id.clone());
+                    }
+                }
+            }
+        }
+        for p in &mut rows {
+            let key = stake::project_key(p.get_str("_id").unwrap_or(""));
+            match s.state(&key, "finalized").await {
+                Ok((state, amount, _, _, _)) => {
+                    p.insert("migration_stake_state", state as i32);
+                    p.insert(
+                        "migration_prl_principal_wei",
+                        if state == 2 || state == 3 {
+                            amount.to_string()
+                        } else {
+                            "0".into()
+                        },
+                    );
+                }
+                Err(_) => {
+                    p.insert(
+                        "migration_inventory_error",
+                        "Unable to read finalized legacy stake",
+                    );
+                }
+            }
+            if let Ok(offer) = crate::credits::offer(app, p, "finalized").await {
+                p.insert("migration_credit_issued", offer.issued.to_string());
+                p.insert("migration_credit_commitment", offer.supply.to_string());
+            }
+        }
         for p in &mut rows {
             let positions = app
                 .db
@@ -191,7 +235,7 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             );
         }
         return Ok(Json(
-            json!({"projects":rows,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract,"sales_enabled":false,"candidate_groups":crate::protocol_groups::load(s.config.chain_id).unwrap_or_default().into_iter().map(|g|g.id).collect::<Vec<_>>()}),
+            json!({"projects":rows,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract,"credit_contract":crate::credits::config(app).ok().map(|c|c.contract),"sales_enabled":false,"candidate_groups":crate::protocol_groups::load(s.config.chain_id).unwrap_or_default().into_iter().map(|g|g.id).collect::<Vec<_>>()}),
         ));
     }
     let id = text(&input, "challenge_id")?;

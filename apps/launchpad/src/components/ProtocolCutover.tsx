@@ -12,7 +12,7 @@ export function ProtocolCutover({token}:{token:string}){
   catch(e){if(generation.current===active)setError(e instanceof Error?e.message:'Could not check contract readiness');}
   finally{if(generation.current===active){running.current=false;setBusy(false);}}
  }
- return <section className="panel section-gap" aria-labelledby="protocol-cutover-title"><h2 id="protocol-cutover-title">Contract migration readiness</h2>
+ return <section className="panel section-gap" aria-labelledby="protocol-cutover-title"><h2 id="protocol-cutover-title">Target contract audit</h2>
  <p>Legacy contracts continue serving existing balances. This check validates staged contracts; it does not activate them, move funds or request a wallet signature.</p>
  <button className="outline-button" disabled={busy||!token} onClick={()=>void check()}>{busy?'Checking finalized contracts…':'Check migration readiness'}</button>
  {!token?<p className="form-hint">Connect and sign with the admin wallet above to inspect migration readiness.</p>:null}

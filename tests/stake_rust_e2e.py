@@ -445,6 +445,10 @@ def run():
     def migration_status(extra=None,expected=200):return api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime',**(extra or {})},expected=expected)
     api('POST','/api/v1/admin/migration-status',{'token':'forged','group_id':'migration-runtime'},expected=403)
     assert migration_status()['stage']=='not_scheduled'
+    api('POST','/api/v1/admin/challenge',{'intent':'migration-governance','payload':{'project_id':pid,'group_id':'migration-runtime','step':'schedule'}},expected=403)
+    inventory=api('POST','/api/v1/admin/query',{'token':session['token']})['projects']
+    assert next(p for p in inventory if p['_id']==third_id)['migration_available_group']=='migration-runtime'
+    assert all('migration_available_group' not in p for p in inventory if p['_id']!=third_id)
     gov_plan,_=admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'schedule'})
     scheduled=send(admin,gov_plan['transaction']['to'],gov_plan['transaction']['data'])
     progress=migration_status({'tx_hash':scheduled['transactionHash']});assert progress['stage']=='timelock_countdown' and progress['remaining_seconds']>0
