@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-08",
+  "application_revision": "cb1d4d13bcad487ebbe9c377bcd84c8e9df4ac43",
+  "frontend_gateway_passed": 57,
+  "rust_unit_passed": 19,
+  "rust_unit_ignored": 1,
+  "rust_mongodb_anvil_integration": "passed",
+  "regression": "Freshly deployed gate returns deployment_waiting_finality with deployment_verified false; after simulated finality the complete schedule/execute/migration flow passes",
+  "browser_fixture": "Schedule disabled while finalized factory/gate code is missing",
+  "live_health": 200,
+  "unauthenticated_status_post": 401,
+  "chain_service_configuration": "unchanged",
+  "live_governance_transaction_sent_by_agent": false
+}
