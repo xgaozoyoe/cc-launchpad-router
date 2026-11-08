@@ -2,8 +2,9 @@ import type {ReactNode} from 'react';
 type Row={_id:string;name:string;status:string;contract_group?:string;migration_available_group?:string;migration_stake_state?:number;migration_prl_principal_wei?:string;migration_credit_issued?:string;migration_inventory_error?:string};
 export function DeploymentMigration({projects,sourceStake,sourceCredits,targetGroup,readiness,children}:{projects:Row[];sourceStake:string;sourceCredits?:string;targetGroup?:string;readiness?:ReactNode;children:ReactNode}){
  const funded=projects.filter(p=>BigInt(p.migration_prl_principal_wei??'0')>0n||BigInt(p.migration_credit_issued??'0')>0n);
- const uncovered=funded.filter(p=>!p.migration_available_group&&!p.contract_group),errors=projects.filter(p=>p.migration_inventory_error);
- const ready=funded.length===1&&uncovered.length===0&&errors.length===0;
+ const uncovered=funded.filter(p=>!p.migration_available_group&&!p.contract_group);
+ // Keep the workflow visible after a successful transfer clears the source assets.
+ const ready=projects.filter(p=>p.migration_available_group).length===1;
  return <section className="panel section-gap deployment-console" aria-labelledby="deployment-migration-title"><span className="eyebrow">PLATFORM DEPLOYMENT · SEPOLIA</span><h2 id="deployment-migration-title">Migrate current deployment</h2>
  <p>One deployment-level workflow. The table below identifies all application projects; asset-transfer instructions are generated from the verified source records, not from whichever project card was clicked.</p>
  <p className="real-id">Source stake: {sourceStake}<br/>Source credits: {sourceCredits??'Not configured'}<br/>Target group: {targetGroup??'No reviewed target'}</p>
