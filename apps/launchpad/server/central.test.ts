@@ -115,3 +115,16 @@ test('collateral withdrawal preparation and tracking stay authenticated and same
  for(const action of ['withdraw','submit']){assert.equal((await centralProxy(req(base+'/'+action,'POST','https://attacker.example'),env,transport,session)).status,403);assert.equal((await centralProxy(req(base+'/'+action),env,transport,session)).status,405);assert.equal((await centralProxy(req(base+'/'+action,'POST'),env,transport,session)).status,200);}
  assert.equal(calls,3);
 });
+
+
+test('protocol readiness is session-protected same-origin POST with no activation route',async()=>{
+ const url=env.APP_ORIGIN+'/api/central/admin/protocol';let calls=0;
+ const transport:typeof fetch=async(target)=>{calls++;assert.equal(String(target),env.CENTRAL_API_ORIGIN+'/api/v1/admin/protocol');return Response.json({can_activate:false});};
+ const req=(method:string,origin=env.APP_ORIGIN)=>new Request(url,{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})});
+ assert.equal((await centralProxy(req('POST','https://attacker.example'),env,transport,session)).status,403);
+ assert.equal((await centralProxy(req('POST'),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req('GET'),env,transport,session)).status,405);
+ assert.equal((await centralProxy(req('POST'),env,transport,session)).status,200);
+ assert.equal(calls,1);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/admin/activate',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,transport,session)).status,404);
+});

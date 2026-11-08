@@ -6,6 +6,7 @@ mod credit_transactions;
 mod credit_worker;
 mod credits;
 mod deployment;
+mod protocol_groups;
 mod rpc_check;
 mod rpc_credentials;
 mod stake;

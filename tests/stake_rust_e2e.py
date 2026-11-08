@@ -6,6 +6,7 @@ from pathlib import Path
 from eth_account import Account
 from eth_account.messages import encode_defunct
 from eth_utils import keccak
+from eth_abi import encode
 ROOT=Path(__file__).resolve().parents[1]
 BIN=Path(os.environ.get('CARGO_TARGET_DIR','/tmp/cc-central-target'))/'debug'
 FOUNDRY=Path.home()/'.foundry/bin'
@@ -85,6 +86,8 @@ def run():
    config={'chain_id':31337,'staking_contract':escrow,'token_address':token,'deployment_block':int(token_receipt['blockNumber'],16)}
    (tmp/'chain.json').write_text(json.dumps(config))
    env.update(MONGODB_URI=f'mongodb://launchpad:{app_pw}@127.0.0.1:{mongo_port}/launchpad?replicaSet=rs0&authSource=launchpad',CENTRAL_HMAC_KEY_FILE=str(tmp/'hmac'),BIND_ADDRESS=f'127.0.0.1:{api_port}',CHAIN_CONFIG_FILE=str(tmp/'chain.json'),CHAIN_RPC_URL=rpc_url,CHAIN_ALLOW_LOCAL='1',APP_ORIGIN='http://localhost:4174',STAKE_CAST=str(FOUNDRY/'cast'),STAKE_KEYSTORE=str(tmp/'operator.json'),STAKE_PASSWORD_FILE=str(tmp/'password'))
+   (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[]}))
+   env['PROTOCOL_GROUPS_FILE']=str(tmp/'protocol-groups.json')
    env.update(CREDIT_CONFIG_FILE=str(tmp/'credits.json'),CREDIT_SETTLER_KEYSTORE=str(tmp/'settler.json'),CREDIT_SETTLER_PASSWORD_FILE=str(tmp/'password'))
    (tmp/'frpc').write_bytes(b'test-binary');(tmp/'ca').write_text('test-cert');(tmp/'transport').write_text('transport-key');(tmp/'license').write_text('license')
    bundle_config={'python':os.environ.get('BUNDLE_PYTHON','python3'),'helper':str(ROOT/'scripts/provider_bundle.py'),'server_addr':'127.0.0.1','server_port':7000,'tls_server_name':'localhost','frpc_binary':str(tmp/'frpc'),'frpc_sha256':hashlib.sha256(b'test-binary').hexdigest(),'ca_file':str(tmp/'ca'),'transport_token_file':str(tmp/'transport'),'license_file':str(tmp/'license'),'credential_dir':str(tmp/'credentials')}
@@ -194,6 +197,41 @@ def run():
    listing=api('POST','/api/v1/admin/query',{'token':session['token']})
    assert any(p['_id']==pid for p in listing['projects'])
    api('POST','/api/v1/admin/query',{'token':session['token']},user='bob',expected=403)
+   # Candidate audits must never activate contracts or change legacy routing.
+   api('POST','/api/v1/admin/protocol',{'token':'forged'},expected=403)
+   api('POST','/api/v1/admin/protocol',{'token':session['token']},user='bob',expected=403)
+   protocol=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+   assert protocol['phase']=='preparing' and not protocol['can_activate'] and protocol['legacy_staking_contract']==escrow.lower()
+   def deploy_modular(name,types,values):
+    code=json.loads(next((ROOT/'contracts/out').glob('*/'+name+'.json')).read_text())['bytecode']['object']
+    return send(admin,None,code+encode(types,values).hex())
+   gov=deploy_modular('LaunchpadTimelock',['address[]','address[]'],[[admin],[admin]])['contractAddress']
+   candidate_receipt=deploy_modular('TestnetProtocolFactory',['address']*6,[token,gov,admin,admin,admin,admin])
+   factory=candidate_receipt['contractAddress']
+   contracts={'factory':factory,'governance':gov}
+   for component,getter in [('registry','registry()'),('credit_token','creditToken()'),('usage_escrow','usageEscrow()'),('payment_escrow','paymentEscrow()'),('stake_vault','stakeVault()'),('sale_router','saleRouter()'),('settlement_module','settlementModule()')]:
+    contracts[component]='0x'+rpc('eth_call',[{'to':factory,'data':'0x'+selector(getter)},'latest'])[-40:]
+   hashes={name:'0x'+keccak(bytes.fromhex(rpc('eth_getCode',[address,'latest'])[2:])).hex() for name,address in contracts.items()}
+   candidate={'id':'local-staged','version':'modular-v1','chain_id':31337,'deployment_block':int(candidate_receipt['blockNumber'],16),'prl_token':token,'contracts':contracts,'runtime_hashes':hashes}
+   (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}))
+   rpc('anvil_mine',['0x80'])
+   protocol=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+   assert protocol['phase']=='staged' and not protocol['can_activate'] and protocol['candidates'][0]['validation']['code_and_bindings']=='passed',protocol
+   assert api('GET','/api/v1/status')['chain']['staking_contract']==escrow.lower()
+   altered=json.loads(json.dumps(candidate));altered['runtime_hashes']['registry']='0x'+'00'*32
+   (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[altered]}))
+   protocol=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+   assert not protocol['can_activate'] and 'hash mismatch' in protocol['candidates'][0]['validation']['error']
+   altered=json.loads(json.dumps(candidate))
+   for field_name in ['contracts','runtime_hashes']:altered[field_name]['sale_router'],altered[field_name]['settlement_module']=altered[field_name]['settlement_module'],altered[field_name]['sale_router']
+   (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[altered]}))
+   protocol=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+   assert 'binding mismatch' in protocol['candidates'][0]['validation']['error'] and not protocol['can_activate']
+   (tmp/'protocol-groups.json').write_text('{invalid')
+   protocol=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+   assert protocol['phase']=='blocked' and not protocol['can_activate'] and str(tmp) not in json.dumps(protocol)
+   (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[]}))
+   print('PASS staged contract groups: real finalized bytecode/bindings/governance audit, tampering rejected, admin isolation, no activation or legacy config mutation.',flush=True)
    admin_sign('prepare',{'project_id':pid},expected=403) # missing VERIFIER_ROLE / capacity
    admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True},provider.key,expected=403)
    admin_sign('retest',{'project_id':pid},expected=409) # no publisher consent yet

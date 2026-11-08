@@ -6,6 +6,8 @@ Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/te
 
 The next architecture separates stable PRL custody, payment reserves, credit ownership and usage accounting from replaceable sale/settlement modules. Its isolated modular contract core now has local Foundry tests and an Anvil + authenticated HTTP-fixture transaction test; it is not connected to the Rust API or production UI. See [architecture decision](CONTRACT-ARCHITECTURE.zh-CN.md). The progressive V2 prototype is a reference only, not the migration deployment target. Existing production contracts and funds remain unchanged; migration requires the new implementation, tests and a revised execution plan.
 
+A wallet-authenticated, read-only [cutover readiness check](CONTRACT-CUTOVER.md) is implemented for staged manifests. It verifies finalized runtime hashes and peer bindings but has no activation endpoint; it does not enable modular purchases or perform migration.
+
 ## Active application
 
 The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node serves React/Auth.js on tailnet port 9001, Rust runs on loopback 9002, and a dedicated authenticated MongoDB replica set uses loopback 27189. Vercel configuration is retained as an alternative, not the active central backend. The public inference route examples using `api.example.com` are placeholders.

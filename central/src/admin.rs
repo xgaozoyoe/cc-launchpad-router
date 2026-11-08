@@ -127,7 +127,7 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             json!({"challenge_id":id,"message":message,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract}),
         ));
     }
-    if action == "query" {
+    if action == "query" || action == "protocol" {
         let token = text(&input, "token")?;
         let valid = app
             .db
@@ -139,6 +139,9 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             .map_err(unavailable)?;
         if valid.is_none() {
             return Err(denied("Connect and sign with the admin wallet"));
+        }
+        if action == "protocol" {
+            return Ok(Json(crate::protocol_groups::report(app).await));
         }
         let mut rows=app.db.collection::<Document>("projects").find(doc!{}).projection(doc!{"_id":1,"name":1,"model_id":1,"status":1,"stake_finalized":1,"provider_id":1,"wallet_address":1,"launch_id":1,"rpc_deadline":1,"onchain_key":1,"capacity_approval":1,"verification_tx_hash":1}).sort(doc!{"created_at":-1}).limit(100).await.map_err(unavailable)?.try_collect::<Vec<_>>().await.map_err(unavailable)?;
         crate::project_progress(app, &mut rows)
