@@ -95,13 +95,13 @@ test('real prompt trials require authenticated session and same-origin POST',asy
 test('paid credit routes require authenticated sessions, same origin and exact methods',async()=>{
  const id='11111111-1111-4111-8111-111111111111';let calls=0;const transport:typeof fetch=async(url)=>{calls++;assert.match(String(url),/\/api\/v1\/credits\//);return Response.json({ok:true});};
  const request=(path:string,method='GET',origin=env.APP_ORIGIN)=>new Request(env.APP_ORIGIN+'/api/central/credits/'+path,{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})});
- for(const action of ['claim-revenue','wallet/challenge','wallet/bind',id+'/purchase',id+'/infer',id+'/withdraw',id+'/deposit',id+'/complete-withdrawal',id+'/cancel-withdrawal']){
+ for(const action of ['claim-revenue','wallet/challenge','wallet/bind',id+'/transactions',id+'/purchase',id+'/infer',id+'/withdraw',id+'/deposit',id+'/complete-withdrawal',id+'/cancel-withdrawal']){
  assert.equal((await centralProxy(request(action,'POST','https://attacker.example'),env,transport,session)).status,403);
  assert.equal((await centralProxy(request(action,'POST'),env,transport,async()=>Response.json({}))).status,401);
  assert.equal((await centralProxy(request(action),env,transport,session)).status,405);
  assert.equal((await centralProxy(request(action,'POST'),env,transport,session)).status,200);
  }
  for(const path of ['me',id,id+'/request/'+'a'.repeat(64)]){assert.equal((await centralProxy(request(path),env,transport,session)).status,200);assert.equal((await centralProxy(request(path,'POST'),env,transport,session)).status,405);}
- assert.equal(calls,12);
+ assert.equal(calls,13);
  assert.equal((await centralProxy(request(id+'/settle','POST'),env,transport,session)).status,404);
 });

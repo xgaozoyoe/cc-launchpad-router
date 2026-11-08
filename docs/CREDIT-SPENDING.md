@@ -85,3 +85,13 @@ Proportional PRL freeing remains the agreed future rule: `floor(initial stake ×
 ## Recorded live Sepolia test
 
 [Live purchase and usage evidence](../config/test-results/paid-credit-sepolia.json): the dedicated test buyer purchased 1,000 credits, waited for finality, received `READY` from the hosted Qwen API, consumed 2 credits and retained 998 available. Replaying the request returned the same cached answer without charging again. The automatic burn transaction mined successfully; the snapshot explicitly records whether its finality had completed. The original 2,000 tPRL deposit was independently checked and remained locked. This live result is separate from the HTTP-fixture Anvil integration tests.
+
+## Wallet transaction tracking
+
+The backend persists wallet-submitted transaction hashes in `credit_wallet_transactions`, scoped to contract, project and bound buyer wallet. `POST /api/v1/credits/<project-uuid>/transactions` accepts only a hash. When the RPC can see it, the backend validates the sender, credit-contract destination, operation selector and project argument; a submitted hash never adds credits.
+
+The browser stores an account/wallet/chain/contract-scoped fallback hash immediately after wallet submission and retries metadata registration on refresh, without resending the chain transaction. Successful purchases/deposits/withdrawal events are also recovered from chain logs, including older transactions that predate this tracking feature. Bounded historical scans use persistent cursors and always include recent activity. Previously unrecorded reverted or pending transactions cannot be discovered from successful event logs; their hash must be registered from the wallet.
+
+Each row shows the hash/explorer link, action, amount, inclusion block, block confirmations, latest/finalized chain heads, and status: submitted, not yet found, mined awaiting finality, finalized, reverted, invalid or reorg reconciliation. Finality requires a successful receipt in the canonical block at or below the finalized head. RPC outages retain saved hashes with a status-unavailable warning. Balances remain based on finalized contract state, independent of this informational history. The history updates with the ten-second balance refresh while visible.
+
+Ethereum finality is a consensus checkpoint rather than a fixed number of wallet confirmations. It normally trails inclusion by around 15 minutes, and can take longer; see [Ethereum’s finality explanation](https://ethereum.org/roadmap/single-slot-finality). The UI does not turn a block gap into a promised countdown or credit an unfinalized payment.

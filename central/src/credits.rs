@@ -254,8 +254,12 @@ pub async fn state(app: &App, user: &str, id: &str) -> ApiResult {
         .try_collect::<Vec<_>>()
         .await
         .map_err(unavailable)?;
+    let transactions=match tokio::time::timeout(std::time::Duration::from_secs(35),crate::credit_transactions::list(app,&c,id,&wal)).await {
+        Ok(Ok(v))=>v,
+        _=>crate::credit_transactions::cached(app,&c,id,&wal).await.unwrap_or_else(|_|json!({"available":false,"transactions":[],"error":"Transaction status is temporarily unavailable. Check the saved wallet transaction before buying again."})),
+    };
     Ok(Json(
-        json!({"configured":true,"deployment_block":c.deployment_block,"chain_id":c.chain_id,"contract":c.contract,"wallet":wal,"project_id":id,"name":p.get_str("name").ok(),"model_id":p.get_str("model_id").ok(),"provider":o.provider,"price_wei_per_credit":o.price.to_string(),"supply":o.supply.to_string(),"issued":o.issued.to_string(),"sales_open":o.active&&p.get_str("status").ok()==Some("accepted"),"finalized":as_state(&a),"latest":as_state(&latest),"available":if frozen{0}else{free}.to_string(),"reserved":r.to_string(),"consumed_pending":u.saturating_sub(a.burned).to_string(),"incoming_pending":latest.deposited.saturating_sub(a.deposited).to_string(),"withdrawal_frozen":frozen,"requests":requests,"prl_policy":"Existing PRL remains locked; no proportional release in this test."}),
+        json!({"transaction_history":transactions,"configured":true,"deployment_block":c.deployment_block,"chain_id":c.chain_id,"contract":c.contract,"wallet":wal,"project_id":id,"name":p.get_str("name").ok(),"model_id":p.get_str("model_id").ok(),"provider":o.provider,"price_wei_per_credit":o.price.to_string(),"supply":o.supply.to_string(),"issued":o.issued.to_string(),"sales_open":o.active&&p.get_str("status").ok()==Some("accepted"),"finalized":as_state(&a),"latest":as_state(&latest),"available":if frozen{0}else{free}.to_string(),"reserved":r.to_string(),"consumed_pending":u.saturating_sub(a.burned).to_string(),"incoming_pending":latest.deposited.saturating_sub(a.deposited).to_string(),"withdrawal_frozen":frozen,"requests":requests,"prl_policy":"Existing PRL remains locked; no proportional release in this test."}),
     ))
 }
 pub fn tx(c: &Config, wal: &str, data: String, value: u128) -> Value {
@@ -400,6 +404,9 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
     }
     if method == "GET" && action.is_empty() {
         return state(app, user, id).await;
+    }
+    if action == "transactions" && method == "POST" {
+        return crate::credit_transactions::submit(app, user, id, body).await;
     }
     let wal = wallet(app, user).await?;
     let p = project(app, id).await?;

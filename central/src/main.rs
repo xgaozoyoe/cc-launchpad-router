@@ -1,6 +1,7 @@
 mod admin;
 mod auth;
 mod catalog;
+mod credit_transactions;
 mod credit_worker;
 mod credits;
 mod deployment;
@@ -435,6 +436,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             IndexModel::builder()
                 .keys(doc! {"wallet":1})
                 .options(IndexOptions::builder().unique(true).build())
+                .build(),
+        )
+        .await?;
+    db.collection::<Document>("credit_wallet_transactions")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! {"contract":1,"wallet":1,"project_id":1,"at":-1})
                 .build(),
         )
         .await?;

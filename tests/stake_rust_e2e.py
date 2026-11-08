@@ -320,10 +320,30 @@ def run():
    api('POST',credit_path+'/purchase',{'quantity':1000,'price':0},user='paid-buyer',expected=400)
    prepared=api('POST',credit_path+'/purchase',{'quantity':1000},user='paid-buyer')['transaction']
    assert prepared['from']==buyer.address.lower() and int(prepared['value'],16)==1000*10**9 and prepared['to']==credits.lower()
-   send(buyer.address,credits,prepared['data'],int(prepared['value'],16))
+   purchase_receipt=send(buyer.address,credits,prepared['data'],int(prepared['value'],16))
    pending=api('GET',credit_path,user='paid-buyer');assert pending['available']=='0' and pending['incoming_pending']=='1000'
+   history=pending['transaction_history'];assert history['available']
+   tracked=next(t for t in history['transactions'] if t['tx_hash']==purchase_receipt['transactionHash']);assert tracked['status']=='awaiting-finality' and tracked['quantity']=='1000' and not tracked['finalized']
+   tx_path=credit_path+'/transactions'
+   api('POST',tx_path,{'tx_hash':purchase_receipt['transactionHash']},user='alice',expected=409)
+   api('POST',tx_path,{'tx_hash':tx_hash},user='paid-buyer',expected=400)
+   api('POST',tx_path,{'tx_hash':purchase_receipt['transactionHash']},user='paid-buyer')
+   api('POST',tx_path,{'tx_hash':purchase_receipt['transactionHash']},user='paid-buyer')
+   unknown='0x'+'1'*64;api('POST',tx_path,{'tx_hash':unknown},user='paid-buyer')
+   pending=api('GET',credit_path,user='paid-buyer');assert pending['incoming_pending']=='1000'
+   assert next(t for t in pending['transaction_history']['transactions'] if t['tx_hash']==unknown)['status']=='not-seen'
+   rpc('evm_setAutomine',[False])
+   failed_hash=rpc('eth_sendTransaction',[{'from':buyer.address,'to':credits,'data':prepared['data'],'value':'0x0','gas':'0x800000'}])
+   api('POST',tx_path,{'tx_hash':failed_hash},user='paid-buyer')
+   history=api('GET',credit_path,user='paid-buyer')['transaction_history'];assert next(t for t in history['transactions'] if t['tx_hash']==failed_hash)['status']=='submitted'
+   rpc('evm_setAutomine',[True]);rpc('anvil_mine',['0x1'])
+   failed_receipt=wait(lambda:rpc('eth_getTransactionReceipt',[failed_hash]));assert failed_receipt['status']=='0x0'
+   api('POST',tx_path,{'tx_hash':failed_hash},user='paid-buyer')
+   history=api('GET',credit_path,user='paid-buyer')['transaction_history'];assert next(t for t in history['transactions'] if t['tx_hash']==failed_hash)['status']=='failed'
+
    rpc('anvil_mine',['0x80'])
-   assert api('GET',credit_path,user='paid-buyer')['available']=='1000'
+   finalized_position=api('GET',credit_path,user='paid-buyer');assert finalized_position['available']=='1000'
+   assert next(t for t in finalized_position['transaction_history']['transactions'] if t['tx_hash']==purchase_receipt['transactionHash'])['status']=='finalized'
    request={'request_id':str(uuid.uuid4()),'prompt':'Paid greeting','max_output_tokens':128}
    result=api('POST',credit_path+'/infer',request,user='paid-buyer');assert result['result']['text']=='hello' and result['consumed']==3
    replay=api('POST',credit_path+'/infer',request,user='paid-buyer');assert replay['replayed'] and replay['result']['text']=='hello'

@@ -20,6 +20,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
 | Default project directory and provider setup | Real backend records and model registry; no seeded offers or simulated balances |
+| Wallet transaction tracking | Persistent submitted hashes, validated receipts, historical purchase recovery, pending/finalized/reverted status and current chain heads in My credits |
 | Real buyer purchasing and usage | New test credit escrow, wallet proof, finalized balances, actual API inference and automatic batch burns; existing PRL stays locked |
 | Buyer offers, credits, PRL wallet, inference and pool in `/#demo` | Explicit concept simulations/browser-local data, not production token balances or measured GPU capacity |
 

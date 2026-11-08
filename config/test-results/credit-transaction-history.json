@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-08",
+  "scope": "Actual Rust service, authenticated MongoDB replica set, disposable Anvil and HTTP provider fixture",
+  "result": "passed",
+  "cases": [
+    "Recover successful purchases from logs without browser registration",
+    "Persist submitted hashes and reject mismatched sender/contract/project",
+    "Submitted mempool transaction transitions to reverted without crediting balance",
+    "Mined successful purchase remains unavailable until finality",
+    "Canonical finalized purchase is marked credited",
+    "Unknown hashes remain not-seen and do not mint or credit",
+    "Repeated metadata registration is idempotent",
+    "Wallet/account isolation",
+    "Purchase, inference, replay, burn, withdrawal and redeposit remain functional"
+  ],
+  "frontend_gateway_tests_passed": 49,
+  "rust_unit_tests_passed": 13,
+  "rust_tests_ignored": 1,
+  "build": "TypeScript, gateway ESM, Vite and Rust passed"
+}
