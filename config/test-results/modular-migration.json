@@ -24,5 +24,21 @@
     "proportional PRL provider withdrawal",
     "legacy isolation and finality/reorg regressions"
   ],
-  "live_asset_migration": false
+  "live_asset_migration": false,
+  "deployment": {
+    "application_revision": "72595a41cbf9413a8dab8fad59137e82647d4517",
+    "origin": "https://riddle.xyz",
+    "backend_health": "passed",
+    "public_health": "passed",
+    "unauthenticated_modular_endpoint": 401,
+    "candidate": "sepolia-modular-20261108",
+    "candidate_monitor_enabled": false,
+    "legacy_stake_principal_wei": "2000000000000000000000",
+    "legacy_stake_state": 3,
+    "migration_gate_bound": false,
+    "timelock_seconds": 172800,
+    "governance_scheduled": false,
+    "live_asset_migration": false,
+    "browser": "Google session restored; deployed admin page inspected; no wallet signing performed"
+  }
 }

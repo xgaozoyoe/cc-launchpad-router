@@ -125,7 +125,7 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 
 ## Rust central backend
 
-The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz, with native FRPS authorization. The older Python FRP/stake stack remains a separate reference implementation. Finalized stake events now reserve Launch IDs. Wallet-authorized manual demo capacity approval and finalized on-chain acceptance are available. Measured capacity benchmarking and sales integration remain unfinished; sales are disabled.
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz, with native FRPS authorization. The older Python FRP/stake stack remains a separate reference implementation. Finalized stake events now reserve Launch IDs. Wallet-authorized manual demo capacity approval and finalized on-chain acceptance are available. Measured capacity benchmarking remains unfinished. Per-launch Sepolia test credit purchases and real inference are available for configured offers; acceptance alone does not open sales.
 
 ## Run the integrated workspace
 
@@ -148,3 +148,7 @@ The default website now shows the [real Launchpad directory](docs/REAL-LAUNCHPAD
 Verified providers can enable [limited real prompt trials](docs/PROMPT-TRIALS.md): signed-in users test actual inference before purchasing, with server-enforced account quotas, project caps and concurrency limits. Preview access does not activate credit sales or settlement.
 
 The implemented Sepolia test [purchase and spending flow](docs/CREDIT-SPENDING.md) covers fixed-price ERC-1155 offerings, ETH purchase/usage escrow, backend reservations, real inference, finalized batch burns, earned provider revenue and unused-credit withdrawal. Existing PRL remains locked; proportional release is not part of this test.
+
+## Modular custody and existing-project migration
+
+The modular contracts separate PRL custody, ETH reserves, credit ownership and usage accounting from sale/settlement modules. Atomic V1 migration and the Rust/React path are implemented and tested; an inactive Sepolia target is deployed. Existing assets stay on V1 until the 48-hour governance step, all-holder consents, exact provider prerequisites, atomic commitment and finalized ledger activation are complete. See the [migration runbook](docs/CONTRACT-CUTOVER.md), [deployment record](config/deployments/modular-sepolia.json) and [test evidence](config/test-results/modular-migration.json).

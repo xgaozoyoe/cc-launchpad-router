@@ -2,9 +2,11 @@
 
 Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/test manifests and the native Ubuntu deployment layout. This is a capability inventory, not a promise of continuously healthy services. Test reports record past results; project status and deadlines can change.
 
-## Modular migration implementation
+## Modular migration implementation and inactive deployment
 
 Stable PRL custody, ETH reserves, credit ownership and usage accounting are separated from replaceable sale/settlement modules. The atomic V1 importer, per-project Rust ledger epochs, finalized monitor, durable settlement worker, buyer reservation/usage UI and holder-consent/admin migration UI are implemented and tested together. See [migration runbook](CONTRACT-CUTOVER.md). The earlier combined V2 prototype is reference code only.
+
+The modular API/UI release is deployed at `https://riddle.xyz` (application revision `72595a41cbf9413a8dab8fad59137e82647d4517`). The [inactive Sepolia target](../config/deployments/modular-sepolia.json) is deployed with reviewed runtime hashes; its monitor is disabled until timelocked gate installation. Health and unauthenticated rejection were checked; the live admin page was inspected, but wallet signing and live asset migration were not performed.
 
 These capabilities do not migrate existing assets merely by deployment. V1 remains active until the specific project's atomic migration is finalized and its new ledger epoch is activated. Sepolia governance uses the explicitly approved test-only single wallet `0x22b47B6689b34d88b9d259029561692cfD589442`, with a fixed 48-hour Timelock. Production multisig governance remains unconfigured.
 
