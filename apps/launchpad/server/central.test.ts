@@ -60,3 +60,12 @@ test('RPC checks require owner session and same-origin POST; GET reads only save
  assert.equal((await centralProxy(req(env.APP_ORIGIN),env,fetcher,session)).status,200);
  const saved=await centralProxy(new Request(env.APP_ORIGIN+path),env,fetcher,session);assert.equal(saved.status,200);assert.equal(saved.headers.get('cache-control'),'no-store');
 });
+
+test('admin signature routes retain session and origin protection',async()=>{
+ const url=env.APP_ORIGIN+'/api/central/admin/capacity';
+ const req=(origin:string)=>new Request(url,{method:'POST',headers:{origin},body:'{"challenge_id":"test","signature":"proof"}'});
+ const transport:typeof fetch=async(url,options)=>{assert.match(String(url),/api\/v1\/admin\/capacity$/);assert.equal(new Headers(options?.headers).get('x-cc-user'),'verified-google-user');return Response.json({error:'Invalid admin signature'},{status:403});};
+ assert.equal((await centralProxy(req('https://attacker.example'),env,transport,session)).status,403);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,session)).status,403);
+});

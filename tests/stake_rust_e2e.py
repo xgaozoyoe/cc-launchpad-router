@@ -98,7 +98,7 @@ def run():
       self.wfile.write(b'data: [DONE]\n\n')
      else:self.wfile.write(json.dumps({'choices':[{'message':{'content':'hello'},'finish_reason':'stop'}],'usage':usage}).encode())
     def log_message(self,*_):pass
-   inference=ThreadingHTTPServer(('127.0.0.1',0),Inference);threading.Thread(target=inference.serve_forever,daemon=True).start();env['RPC_CHECK_PORT']=str(inference.server_port)
+   inference=ThreadingHTTPServer(('127.0.0.1',0),Inference);threading.Thread(target=inference.serve_forever,daemon=True).start();env['RPC_CHECK_PORT']=str(inference.server_port);env['ADMIN_WALLET_ADDRESS']=admin
    backend=start([str(BIN/'cc-central')],env)
    wait(lambda:urllib.request.urlopen(api_url+'/healthz',timeout=1).status==200)
    legacy=str(uuid.uuid4())
@@ -164,6 +164,28 @@ def run():
    assert set(listed['progress'])=={'bundle_issued','last_proxy_at','rpc_status','rpc_checked_at'}
    assert all(p['_id']!=pid for p in api('GET','/api/v1/projects',user='bob')['projects'])
 
+   # Every privileged operation needs a fresh signature from the configured wallet.
+   def admin_sign(intent,payload,signer=admin_key,user='alice',expected=200):
+    c=api('POST','/api/v1/admin/challenge',{'intent':intent,'payload':payload},user=user)
+    sig=Account.sign_message(encode_defunct(text=c['message']),signer).signature.hex()
+    proof={'challenge_id':c['challenge_id'],'signature':'0x'+sig.removeprefix('0x')}
+    return api('POST','/api/v1/admin/'+('authenticate' if intent=='login' else intent),proof,user=user,expected=expected),proof
+   api('POST','/api/v1/admin/query',{'token':'forged'},expected=403)
+   admin_sign('login',{},provider.key,expected=403)
+   session,proof=admin_sign('login',{})
+   api('POST','/api/v1/admin/authenticate',proof,expected=403)
+   listing=api('POST','/api/v1/admin/query',{'token':session['token']})
+   assert any(p['_id']==pid for p in listing['projects'])
+   api('POST','/api/v1/admin/query',{'token':session['token']},user='bob',expected=403)
+   admin_sign('prepare',{'project_id':pid},expected=403) # missing VERIFIER_ROLE / capacity
+   admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True},provider.key,expected=403)
+   approved,proof=admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True})
+   assert approved['benchmarked'] is False and approved['sales_enabled'] is False
+   api('POST','/api/v1/admin/capacity',proof,expected=403)
+   c=api('POST','/api/v1/admin/challenge',{'intent':'capacity','payload':{'project_id':pid,'reason':'Bound to original payload','manual_demo':True}})
+   signed=Account.sign_message(encode_defunct(text=c['message'].replace('Bound to original payload','Tampered approval')),admin_key).signature.hex()
+   api('POST','/api/v1/admin/capacity',{'challenge_id':c['challenge_id'],'signature':'0x'+signed.removeprefix('0x')},expected=403)
+
    saved=issued['launch_id'];time.sleep(11);assert api('GET',path)['project']['launch_id']==saved
    # Contract expiry/refund disables the project without deleting its historic identity.
    rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
@@ -187,10 +209,39 @@ def run():
    rpc('anvil_mine',['0x80'])
    early_refund=wait(lambda:second_state('refunded'),90);assert 'launch_id' not in early_refund
    assert not api('GET','/api/v1/status')['chain']['error']
+   # Separate launch exercises browser-signed verification and finalized FRPS eligibility.
+   send(admin,escrow,'0x'+selector('grantRole(bytes32,address)')+keccak(text='VERIFIER_ROLE').hex()+addr(admin))
+   third=api('POST','/api/v1/projects',{'name':'Admin verified launch','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project'];third_id=third['_id'];third_path='/api/v1/projects/'+third_id
+   c=api('POST',third_path+'/stake/challenge',{'wallet_address':provider.address,'stake_amount':'2000'})
+   sig=Account.sign_message(encode_defunct(text=c['message']),provider.key).signature.hex()
+   api('POST',third_path+'/stake/prepare',{'challenge_id':c['challenge_id'],'signature':'0x'+sig.removeprefix('0x')})
+   wait(lambda:api('GET',third_path)['project']['status']=='awaiting-stake',90)
+   detail=api('GET',third_path+'/stake');send(provider.address,token,detail['approve_data']);send(provider.address,escrow,detail['stake_data']);rpc('anvil_mine',['0x80'])
+   wait(lambda:api('GET',third_path)['project']['status']=='awaiting-rpc',90)
+   third=api('GET',third_path)['project'];bundle=api('POST',third_path+'/deployment/bundle',{})
+   with tarfile.open(fileobj=io.BytesIO(base64.b64decode(bundle['bundle_base64'])),mode='r:gz') as archive:
+    secret=archive.extractfile('provider-'+third['launch_id']+'/private/token').read().decode()
+   third_login={'user':third['provider_id'],'metas':{'provider_token':secret}}
+   request=urllib.request.Request(api_url+'/internal/frp/handler?op=NewProxy',data=json.dumps({'content':{'user':third_login,'proxy_type':'http','proxy_name':third['provider_id']+'.inference','custom_domains':['p-'+hashlib.sha256(third['provider_id'].encode()).hexdigest()[:40]+'.launchpad.internal']}}).encode(),headers={'Content-Type':'application/json'})
+   assert json.load(urllib.request.urlopen(request))['reject'] is False
+   admin_sign('capacity',{'project_id':third_id,'reason':'No passing RPC yet','manual_demo':True},expected=403)
+   api('POST',third_path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret'})
+   admin_sign('capacity',{'project_id':third_id,'reason':'Manual integration demo approval','manual_demo':True})
+   prepared,_=admin_sign('prepare',{'project_id':third_id})
+   tx=prepared['transaction'];assert tx['from'].lower()==admin.lower() and tx['to'].lower()==escrow.lower()
+   receipt=send(admin,escrow,tx['data'])
+   admin_sign('submit',{'project_id':third_id,'tx_hash':receipt['transactionHash']})
+   assert api('GET',third_path)['project']['status']=='verification-pending'
+   rpc('anvil_mine',['0x80'])
+   wait(lambda:api('GET',third_path)['project']['status']=='accepted',90)
+   rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
+   assert hook(third_login)['reject'] is False
+   assert api('GET',third_path)['project']['status']=='accepted'
+   assert api('GET','/api/v1/status')['sales_enabled'] is False
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False
-   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry.')
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility.')
   except Exception:
    log.flush();log.seek(0);print(log.read()[-5000:]);raise
   finally:

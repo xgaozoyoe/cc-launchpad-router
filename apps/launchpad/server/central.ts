@@ -6,9 +6,9 @@ const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache
 export async function centralProxy(request:Request,env:CentralEnvironment,fetcher:typeof fetch=fetch,sessionReader=handleAuth):Promise<Response>{
  const url=new URL(request.url),origin=validOrigin(env.APP_ORIGIN);
  if(!origin)return json({error:'Application origin is not configured.'},503);
- const match=url.pathname.match(/^\/api\/central\/(status|models|projects(?:\/[0-9a-f-]{36}(?:\/stake(?:\/(?:challenge|prepare|submit))?|\/deployment(?:\/(?:bundle|rpc-check))?)?)?)$/);
+ const match=url.pathname.match(/^\/api\/central\/(admin\/(?:challenge|authenticate|query|capacity|prepare|submit)|status|models|projects(?:\/[0-9a-f-]{36}(?:\/stake(?:\/(?:challenge|prepare|submit))?|\/deployment(?:\/(?:bundle|rpc-check))?)?)?)$/);
  if(!match||url.search)return json({error:'Endpoint not found.'},404);
- if(!['GET','POST'].includes(request.method)||(request.method==='POST'&&match[1]!=='projects'&&!/^projects\/[0-9a-f-]{36}\/(?:stake\/(challenge|prepare|submit)|deployment\/(?:bundle|rpc-check))$/.test(match[1])))return json({error:'Method not allowed.'},405);
+ if(!['GET','POST'].includes(request.method)||(request.method==='POST'&&match[1]!=='projects'&&!/^admin\/(challenge|authenticate|query|capacity|prepare|submit)$/.test(match[1])&&!/^projects\/[0-9a-f-]{36}\/(?:stake\/(challenge|prepare|submit)|deployment\/(?:bundle|rpc-check))$/.test(match[1])))return json({error:'Method not allowed.'},405);
  if(request.method==='GET'&&/(?:\/stake\/(challenge|prepare|submit)|\/deployment\/bundle)$/.test(match[1]))return json({error:'Method not allowed.'},405);
  if(request.method==='POST'&&request.headers.get('origin')!==origin)return json({error:'Invalid request origin.'},403);
  const sessionResponse=await sessionReader(new Request(origin+'/api/auth/session',{headers:{cookie:request.headers.get('cookie')??''}}),env);

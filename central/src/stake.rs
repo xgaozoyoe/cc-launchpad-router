@@ -639,7 +639,7 @@ impl Stake {
                     )
                     .await
                     .map_err(fail)?;
-                app.db.collection::<Document>("projects").update_many(doc!{"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"status":"awaiting-rpc"},doc!{"$set":{"status":"chain-halted"}}).await.map_err(fail)?;
+                app.db.collection::<Document>("projects").update_many(doc!{"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"status":{"$in":["awaiting-rpc","verification-pending","accepted"]}},doc!{"$set":{"status":"chain-halted"}}).await.map_err(fail)?;
                 return Err("Finalized checkpoint changed".into());
             }
         }
@@ -701,19 +701,10 @@ impl Stake {
                 app.db.collection::<Document>("projects").update_one(doc!{"_id":text(&p,"_id")?,"status":"stake-submitted","stake_tx_hash":h},doc!{"$set":{"status":"awaiting-stake"},"$unset":{"stake_tx_hash":""},"$addToSet":{"failed_stake_transactions":h}}).await.map_err(fail)?;
             }
         }
-        app.db
-            .collection::<Document>("projects")
-            .update_many(
-                doc! {"status":"awaiting-rpc","stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"rpc_deadline":{"$lte":chain_time as i64}},
-                doc! {"$set":{"status":"expired"}},
-            )
-            .await
-            .map_err(fail)?;
         let projects = app
             .db
             .collection::<Document>("projects")
-            .find(doc! {"status":{"$in":["awaiting-rpc","expired"]},"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"onchain_key":{"$exists":true}})
-            .limit(100)
+            .find(doc! {"status":{"$in":["awaiting-rpc","expired","verification-pending","accepted"]},"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"onchain_key":{"$exists":true}})
             .await
             .map_err(fail)?
             .try_collect::<Vec<_>>()
@@ -721,6 +712,28 @@ impl Stake {
             .map_err(fail)?;
         for p in projects {
             let s = self.state(text(&p, "onchain_key")?, "latest").await?;
+            if s.0 == 2 {
+                let expired = s.3 <= chain_time;
+                let mut reverted = false;
+                if let Ok(hash) = p.get_str("verification_tx_hash") {
+                    let receipt = self.rpc("eth_getTransactionReceipt", json!([hash])).await?;
+                    reverted = receipt["status"].as_str() == Some("0x0");
+                }
+                if expired || reverted {
+                    app.db
+                        .collection::<Document>("projects")
+                        .update_one(
+                            doc! {"_id":text(&p,"_id")?},
+                            doc! {"$set":{"status":if expired {"expired"} else {"awaiting-rpc"}}},
+                        )
+                        .await
+                        .map_err(fail)?;
+                }
+            }
+            if s.0 == 3 {
+                let final_state = self.state(text(&p, "onchain_key")?, "finalized").await?;
+                app.db.collection::<Document>("projects").update_one(doc!{"_id":text(&p,"_id")?},doc!{"$set":{"status":if final_state.0 == 3 {"accepted"} else {"verification-pending"}}}).await.map_err(fail)?;
+            }
             if matches!(s.0, 4 | 5) {
                 app.db
                     .collection::<Document>("projects")

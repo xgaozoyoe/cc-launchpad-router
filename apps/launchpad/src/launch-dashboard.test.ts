@@ -23,3 +23,8 @@ test('checklist advances to capacity only after recorded API pass and keeps sale
  const expired=launchProgress({...project,status:'expired'});assert.equal(expired.some(s=>s.state==='current'),false);assert.equal(expired[4].state,'blocked');
  const draft=launchProgress(projects[0]);assert.equal(draft[0].state,'complete');assert.equal(draft[1].state,'current');assert.equal(draft[2].state,'upcoming');
 });
+
+test('accepted is setup-complete but never sales live',()=>{
+ const p={...projects[1],status:'accepted',stake_finalized:true,progress:{bundle_issued:true,last_proxy_at:123,rpc_status:'passed'}};
+ assert.equal(launchGroup(p.status),'rpc');assert.match(projectBadge(p),/sales closed/);assert.equal(launchProgress(p)[4].state,'complete');assert.equal(launchProgress(p)[5].state,'current');
+});

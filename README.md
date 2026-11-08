@@ -39,13 +39,13 @@ The production workspace runs at https://riddle.xyz. Google login, account-owned
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). RPC acceptance and sales remain closed.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). Functional RPC checks and [wallet-authorized admin review](docs/ADMIN-REVIEW.md) are integrated. Manual demo capacity approval and finalized `verifyProject` acceptance do not enable sales.
 
 ## Stake-gated publishing
 
 **[Project lifecycle and integration status](docs/PROJECT-LIFECYCLE.md)** is the current publishing specification: create project → verify stake on the default chain → issue Launch ID → provision project credential (pending integration) → verify RPC within 24h of the stake block → open sales. Provider ID is the stake transaction hash.
 
-The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Owner-only Linux FRPC bundles are connected; real RPC acceptance remains pending. See [provider bundles](docs/PROVIDER-BUNDLES.md). The older Python monitor uses SQLite and remains a separate reference implementation.
+The UI demonstrates this flow. The backend includes an EVM receipt/event verifier and refuses real stake confirmation until the platform default chain/token/deployed-contract settings are configured. Manual CLI `add` and `launch` issuance is disabled. The central infrastructure can still be initialized with `frp_admin.py init`; authenticated draft APIs are available in Rust. Owner-only Linux FRPC bundles are connected; functional RPC checks and signed admin acceptance are available; measured capacity acceptance remains pending. See [provider bundles](docs/PROVIDER-BUNDLES.md). The older Python monitor uses SQLite and remains a separate reference implementation.
 
 ## Quick start: computing provider
 
@@ -125,7 +125,7 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 
 ## Rust central backend
 
-The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Finalized stake events now reserve Launch IDs. Sales remain disabled until provider RPC/model/capacity acceptance is integrated.
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Finalized stake events now reserve Launch IDs. Wallet-authorized manual demo capacity approval and finalized on-chain acceptance are available. Measured capacity benchmarking and sales integration remain unfinished; sales are disabled.
 
 ## Run the integrated workspace
 

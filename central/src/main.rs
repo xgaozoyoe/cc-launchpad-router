@@ -1,3 +1,4 @@
+mod admin;
 mod auth;
 mod deployment;
 mod rpc_check;
@@ -176,6 +177,9 @@ async fn dispatch(
     let owners = account_ids(&app, &identity.user)
         .await
         .map_err(unavailable)?;
+    if let Some(action) = path.strip_prefix("/api/v1/admin/") {
+        return admin::handle(&app, &identity.user, action, method.as_str(), &body).await;
+    }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
         if let Some((id, action)) = rest.split_once("/deployment") {
             if action == "/rpc-check" {

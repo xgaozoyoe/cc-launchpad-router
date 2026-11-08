@@ -1,0 +1,10 @@
+{
+  "chain_id": 11155111,
+  "staking_contract": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "admin_wallet": "0x22b47b6689b34d88b9d259029561692cfd589442",
+  "role": "VERIFIER_ROLE",
+  "transaction_hash": "0x42098c9ed859f3bdac6307e19976edcc707710edd3d809a96d66d0b1de005241",
+  "block_number": 12087450,
+  "role_confirmed": true,
+  "project_verified": false
+}

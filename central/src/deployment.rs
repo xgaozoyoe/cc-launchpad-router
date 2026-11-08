@@ -27,8 +27,10 @@ fn value<'a>(p: &'a Document, k: &str) -> Result<&'a str, String> {
     p.get_str(k).map_err(|_| format!("Project missing {k}"))
 }
 pub(crate) async fn eligible(app: &App, p: &Document) -> Result<(), String> {
-    if p.get_str("status").ok() != Some("awaiting-rpc")
-        || p.get_bool("stake_finalized").ok() != Some(true)
+    if !matches!(
+        p.get_str("status").unwrap_or(""),
+        "awaiting-rpc" | "verification-pending" | "accepted"
+    ) || p.get_bool("stake_finalized").ok() != Some(true)
     {
         return Err("Project needs an active finalized stake awaiting RPC".into());
     }
@@ -60,8 +62,8 @@ pub(crate) async fn eligible(app: &App, p: &Document) -> Result<(), String> {
     .map_err(|_| "Chain time invalid")?;
     let deadline = p.get_i64("rpc_deadline").map_err(|_| "Missing deadline")?;
     if deadline <= 0
-        || at >= deadline as u64
-        || state.0 != 2
+        || !matches!(state.0, 2 | 3)
+        || (state.0 == 2 && (at >= deadline as u64 || p.get_str("status").ok() == Some("accepted")))
         || state.3 != deadline as u64
         || state.4 != value(p, "wallet_address")?
         || state.1.to_string() != value(p, "stake_raw")?

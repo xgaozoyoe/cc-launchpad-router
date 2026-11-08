@@ -1,6 +1,6 @@
 # Private provider bundles
 
-The active Rust service can issue a project-specific Linux x86_64 `.tar.gz` bundle after a finalized stake has reserved its Launch ID. Use **My launches → View setup requirements → Download FRPC bundle** while the project is active and within its original stake-based deadline.
+The active Rust service can issue a project-specific Linux x86_64 `.tar.gz` bundle after a finalized stake has reserved its Launch ID. Use **My launches → View setup requirements → Download FRPC bundle** while the project is awaiting acceptance within its original stake-based deadline, or after on-chain acceptance.
 
 The authenticated Node gateway derives the owner from the Google session. Bundle creation requires a same-origin POST. Rust checks owner/legacy aliases, finalized project evidence, non-halted chain checkpoint, current contract owner/amount/state and the latest chain timestamp before and after building. Unknown/other-owner projects return 404; expired/refunded/ineligible projects cannot download. Repeated downloads keep the same project credential; they do not extend the deadline.
 
@@ -29,7 +29,7 @@ This profile forwards to a **native model API at 127.0.0.1:8000**. It is not the
 
 ## Existing FRPS authorization
 
-The deployment reuses the existing dedicated FRPS endpoint, not a second port. Its project-scoped configuration adds a pinned certificate and the Rust `/internal/frp/handler` hook. The hook is not exposed through the browser proxy. Both Login and NewProxy require the matching project credential, Provider ID and active chain state/deadline. NewProxy additionally restricts the type to HTTP, the proxy name to `<provider-id>.inference` and its custom domain to the assigned deterministic internal alias. Other domains, groups, path routes and identity substitutions are rejected.
+The deployment reuses the existing dedicated FRPS endpoint, not a second port. Its project-scoped configuration adds a pinned certificate and the Rust `/internal/frp/handler` hook. The hook is not exposed through the browser proxy. Both Login and NewProxy require the matching project credential, Provider ID and active chain state. Awaiting-RPC stakes are deadline-gated; on-chain Verified stakes remain eligible after the original deadline. Refunded/released states are rejected. NewProxy additionally restricts the type to HTTP, the proxy name to `<provider-id>.inference` and its custom domain to the assigned deterministic internal alias. Other domains, groups, path routes and identity substitutions are rejected.
 
 The shared FRP transport token and independent project credential are different checks. A valid transport token alone cannot register a project tunnel. HTTP ingress binds to loopback for operator routing; no public buyer route or sales are activated. Login and proxy-registration timestamps are historical observations, not heartbeat monitoring. Existing sessions are not forcibly disconnected at expiry; platform acceptance and new registrations remain gated. Credential rotation/revocation UI is not implemented.
 

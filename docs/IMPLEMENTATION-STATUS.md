@@ -21,7 +21,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
 | Buyer offers, credits, PRL wallet, resources, inference and pool UI | Concept simulations/browser-local data, not production token balances or measured GPU capacity |
 
-Current end-to-end production publishing stops at **awaiting RPC** (or expiry/inactive state). `sales_enabled` is false. RPC/model/capacity acceptance, real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
+Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. `sales_enabled` remains false: real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
 
 ## Contracts and recorded evidence
 

@@ -2,7 +2,7 @@
 
 The central backend uses Rust, Axum, Tokio and MongoDB. Draft APIs, project-bound wallet signatures, administrative chain registration and finalized Sepolia stake indexing are now connected. A finalized valid stake reserves a Launch ID and a deadline fixed at the stake block time plus 24 hours.
 
-See [the active staking guide](../docs/RUST-STAKING.md) for configuration, API routes, idempotency, finality/reorg handling and tests. The backend always reports sales disabled: RPC/model/capacity acceptance and credit settlement are not connected yet.
+See [the active staking guide](../docs/RUST-STAKING.md) for configuration, API routes, idempotency, finality/reorg handling and tests. The backend always reports sales disabled: functional RPC checks and wallet-authorized manual demo acceptance are connected; measured capacity benchmarks and credit settlement are not. See [admin review](../docs/ADMIN-REVIEW.md).
 
 [Local and single-host startup](../deploy/stack/README.md) covers the integrated React/auth/backend/database stack. For the deployed Ubuntu instance, see [remote operations](../deploy/remote/README.md). An authenticated MongoDB replica set or Atlas is required; standalone MongoDB fails startup.
 

@@ -4,12 +4,12 @@ export const launchGroups:ReadonlyArray<{id:LaunchGroup;label:string}>=[{id:'all
 export function launchGroup(status:string):LaunchGroup {
  if(status==='draft')return 'draft';
  if(['awaiting-registration','awaiting-stake','stake-submitted'].includes(status))return 'staking';
- if(status==='awaiting-rpc')return 'rpc';
+ if(['awaiting-rpc','verification-pending','accepted'].includes(status))return 'rpc';
  if(status==='live')return 'live';
  if(['expired','refunded','released','chain-halted'].includes(status))return 'inactive';
  return 'other';
 }
-export function launchLabel(status:string){return ({draft:'Draft','awaiting-registration':'Registration pending','awaiting-stake':'Awaiting stake','stake-submitted':'Waiting for finality','awaiting-rpc':'Awaiting RPC',live:'Selling credits',expired:'Expired',refunded:'Refunded',released:'Released','chain-halted':'Chain review required'} as Record<string,string>)[status]??status;}
+export function launchLabel(status:string){return ({'verification-pending':'Verification pending finality',accepted:'Accepted · sales closed',draft:'Draft','awaiting-registration':'Registration pending','awaiting-stake':'Awaiting stake','stake-submitted':'Waiting for finality','awaiting-rpc':'Awaiting RPC',live:'Selling credits',expired:'Expired',refunded:'Refunded',released:'Released','chain-halted':'Chain review required'} as Record<string,string>)[status]??status;}
 export function launchAction(status:string){return ({draft:'Continue staking','awaiting-registration':'View registration','awaiting-stake':'Stake tPRL','stake-submitted':'Track confirmation','awaiting-rpc':'View setup requirements',live:'View launch'} as Record<string,string>)[status]??'View record';}
 export function filterLaunches(projects:ServerProject[],group:LaunchGroup,query:string){
  const term=query.trim().toLowerCase();
@@ -34,14 +34,15 @@ export function launchProgress(project:ServerProject):ProgressStep[]{
  const inactive=['expired','refunded','released','chain-halted'].includes(project.status);
  const live=project.status==='live';
  const rpc=project.progress?.rpc_status==='passed';
- const completed=[true,project.stake_finalized===true,!!project.progress?.last_proxy_at,rpc,live,live];
+ const accepted=project.status==='accepted';
+ const completed=[true,project.stake_finalized===true,!!project.progress?.last_proxy_at,rpc,accepted||live,live];
  const current=completed.findIndex(done=>!done);
  const details=[
   'Project saved to your account',
   project.stake_finalized?'Finalized stake recorded':'Submit stake and wait for chain finality',
   project.progress?.last_proxy_at?'Proxy registration recorded; not continuous health monitoring':'Start the assigned FRPC bundle on your model host',
   rpc?'Saved API checks passed':project.progress?.rpc_status==='failed'?'Last API test failed; correct the issue and retest':'Run Test RPC through the assigned tunnel',
-  live?'Launch accepted':'Platform capacity and on-chain acceptance are not implemented yet',
+  accepted||live?'On-chain acceptance finalized':project.status==='verification-pending'?'verifyProject submitted; waiting for finality':project.capacity_approval?'Manual demo capacity approved; admin must sign verifyProject':'Admin capacity approval and on-chain verification required',
   live?'Credit sales open':'Sales remain closed until acceptance and sales integration'
  ];
  return ['Project created','Stake finalized','FRPC registered','API checks passed','Capacity & on-chain acceptance','Credit sales'].map((label,i)=>({label,state:completed[i]?'complete':inactive?'blocked':i===current?'current':'upcoming',detail:details[i]}));
