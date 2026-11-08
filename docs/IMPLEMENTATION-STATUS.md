@@ -2,6 +2,10 @@
 
 Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/test manifests and the native Ubuntu deployment layout. This is a capability inventory, not a promise of continuously healthy services. Test reports record past results; project status and deadlines can change.
 
+## Planned contract architecture (not deployed)
+
+The next architecture separates stable PRL custody, payment reserves, credit ownership and usage accounting from replaceable sale/settlement modules. See [architecture decision](CONTRACT-ARCHITECTURE.zh-CN.md). The progressive V2 prototype is a reference only, not the migration deployment target. Existing production contracts and funds remain unchanged; migration requires the new implementation, tests and a revised execution plan.
+
 ## Active application
 
 The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node serves React/Auth.js on tailnet port 9001, Rust runs on loopback 9002, and a dedicated authenticated MongoDB replica set uses loopback 27189. Vercel configuration is retained as an alternative, not the active central backend. The public inference route examples using `api.example.com` are placeholders.
