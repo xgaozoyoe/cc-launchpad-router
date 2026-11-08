@@ -146,3 +146,5 @@ Open http://localhost:4174. The project dialog now saves drafts through the same
 The default website now shows the [real Launchpad directory](docs/REAL-LAUNCHPAD.md), actual project verification and the backend-supported model list. Purchases remain disabled. Seeded offers, simulated balances and public-pool illustrations are available only in the explicitly labelled Demo workspace (`/#demo`); default project creation never falls back to a fake launch.
 
 Verified providers can enable [limited real prompt trials](docs/PROMPT-TRIALS.md): signed-in users test actual inference before purchasing, with server-enforced account quotas, project caps and concurrency limits. Preview access does not activate credit sales or settlement.
+
+The proposed paid model-usage process is documented in [Spending credits on launched models](docs/CREDIT-SPENDING.md): on-chain purchase/usage escrow, backend reservations and metering, finalized batch burns, unused-credit withdrawal and settlement-based PRL release. It is a design specification; paid credit spending is not implemented yet.

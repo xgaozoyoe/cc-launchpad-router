@@ -64,3 +64,5 @@ Real local FRP transport was tested against mock inference. GPU model loading an
 When adding a feature, update its implementation, tests and this inventory together. Keep private deployment configuration, keys and logs out of public documentation.
 
 The default UI now uses the authenticated [real launch directory](REAL-LAUNCHPAD.md), with public metadata from finalized-stake projects and actual verification status. Private drafts and account/configuration fields are excluded. The old seeded offers, credit balances and public-pool UI are isolated under `/#demo`. Real My credits states the ledger is not connected; purchasing remains disabled.
+
+The intended paid-credit flow and its transaction/state boundaries are specified in [Spending credits on launched models](CREDIT-SPENDING.md). Purchase, usage escrow, paid reservations, burn settlement and proportional collateral unlocking remain proposed; this documentation does not activate sales.

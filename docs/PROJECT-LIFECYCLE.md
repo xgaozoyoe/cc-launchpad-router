@@ -33,3 +33,7 @@ Only that provider's successful, settled delivery counts. Failed requests, unset
 `frp_admin.py add` and `launch` are disabled. `init` and `list` remain usable for the separate FRP infrastructure. Generic transport code supports more flexible provider/launch associations; the active workflow uses a project stake hash as Provider ID. Long transaction hashes need the deterministic internal alias enforced by that reference registry. A connected tunnel does not prove capacity or exclusive hardware ownership.
 
 The browser-local `ProjectLaunch` fallback remains a labeled simulation for standalone demo mode; it is not the integrated production flow.
+
+## After verification: paid model usage (proposed)
+
+See [Spending credits on launched models](CREDIT-SPENDING.md) for purchase and locking, request reservations, usage accounting, on-chain batch burns, withdrawal reconciliation and proportional collateral release. Normal prompts do not require individual on-chain transactions. These paid-credit steps are not implemented; the existing free prompt preview is separate.
