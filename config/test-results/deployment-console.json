@@ -1,0 +1,20 @@
+{
+  "date": "2026-11-08",
+  "application_revision": "acf45f142bca4f0cac1f2795e4f52bbc20c943cd",
+  "rust_unit_passed": 20,
+  "rust_unit_ignored": 1,
+  "frontend_gateway_passed": 57,
+  "rust_mongodb_anvil_integration": "passed",
+  "verified": [
+    "wrong project rejected before signature challenge",
+    "only matching fixed gate record receives asset controls",
+    "deployment inventory includes finalized stake and issued credits",
+    "single deployment console; no repeated project migration entry points",
+    "legacy and modular paid-credit regressions"
+  ],
+  "public_health": 200,
+  "production_console_bundle": "verified",
+  "chain_and_service_configuration": "unchanged",
+  "global_default_cutover_implemented": false,
+  "live_assets_migrated": false
+}
