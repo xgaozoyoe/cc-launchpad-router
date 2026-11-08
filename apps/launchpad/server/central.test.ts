@@ -50,3 +50,13 @@ test('bundle download requires session and same-origin POST; streams only a priv
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+path),env,fetcher,session)).status,405);
  const r=await centralProxy(req(),env,fetcher,session);assert.equal(r.headers.get('content-type'),'application/gzip');assert.equal(r.headers.get('cache-control'),'no-store, private');assert.match(r.headers.get('content-disposition')??'',/attachment/);assert.equal(await r.text(),'archive-bytes');
 });
+
+test('RPC checks require owner session and same-origin POST; GET reads only saved status',async()=>{
+ const path='/api/central/projects/11111111-1111-4111-8111-111111111111/deployment/rpc-check';
+ const fetcher:typeof fetch=async(url,options)=>{assert.match(String(url),/deployment\/rpc-check$/);assert.equal(new Headers(options?.headers).get('x-cc-user'),'verified-google-user');return Response.json({report:{status:'passed'},capacity_accepted:false,sales_enabled:false});};
+ const req=(origin:string)=>new Request(env.APP_ORIGIN+path,{method:'POST',headers:{origin},body:JSON.stringify({inference_api_key:'test-inference-key'})});
+ assert.equal((await centralProxy(req('https://attacker.example'),env,fetcher,session)).status,403);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,fetcher,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(req(env.APP_ORIGIN),env,fetcher,session)).status,200);
+ const saved=await centralProxy(new Request(env.APP_ORIGIN+path),env,fetcher,session);assert.equal(saved.status,200);assert.equal(saved.headers.get('cache-control'),'no-store');
+});

@@ -1,5 +1,6 @@
 mod auth;
 mod deployment;
+mod rpc_check;
 mod stake;
 use axum::{
     body::Bytes,
@@ -127,6 +128,9 @@ async fn dispatch(
         .map_err(unavailable)?;
     if let Some(rest) = path.strip_prefix("/api/v1/projects/") {
         if let Some((id, action)) = rest.split_once("/deployment") {
+            if action == "/rpc-check" {
+                return rpc_check::handle(&app, owners, id, action, method.as_str(), &body).await;
+            }
             return deployment::handle(&app, owners, id, action, method.as_str()).await;
         }
     }

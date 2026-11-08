@@ -79,6 +79,26 @@ def run():
    (tmp/'frpc').write_bytes(b'test-binary');(tmp/'ca').write_text('test-cert');(tmp/'transport').write_text('transport-key');(tmp/'license').write_text('license')
    bundle_config={'python':os.environ.get('BUNDLE_PYTHON','python3'),'helper':str(ROOT/'scripts/provider_bundle.py'),'server_addr':'127.0.0.1','server_port':7000,'tls_server_name':'localhost','frpc_binary':str(tmp/'frpc'),'frpc_sha256':hashlib.sha256(b'test-binary').hexdigest(),'ca_file':str(tmp/'ca'),'transport_token_file':str(tmp/'transport'),'license_file':str(tmp/'license'),'credential_dir':str(tmp/'credentials')}
    (tmp/'bundles.json').write_text(json.dumps(bundle_config));env['PROVIDER_BUNDLE_CONFIG']=str(tmp/'bundles.json')
+   from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+   import threading
+   observed_hosts=[]
+   class Inference(BaseHTTPRequestHandler):
+    def do_GET(self):
+     observed_hosts.append(self.headers.get('Host'))
+     if self.path=='/health':self.send_response(200);self.end_headers();return
+     if self.headers.get('Authorization')!='Bearer test-inference-secret':self.send_response(401);self.end_headers();return
+     self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(json.dumps({'data':[{'id':'qwen3-8b-awq'}]}).encode())
+    def do_POST(self):
+     body=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+     usage={'prompt_tokens':2,'completion_tokens':3,'total_tokens':5}
+     self.send_response(200);self.send_header('Content-Type','text/event-stream' if body.get('stream') else 'application/json');self.end_headers()
+     if body.get('stream'):
+      chunks=[{'choices':[{'delta':{'content':'hello'}}]},{'choices':[],'usage':usage}]
+      for chunk in chunks:self.wfile.write(('data: '+json.dumps(chunk)+'\n\n').encode());self.wfile.flush()
+      self.wfile.write(b'data: [DONE]\n\n')
+     else:self.wfile.write(json.dumps({'choices':[{'message':{'content':'hello'},'finish_reason':'stop'}],'usage':usage}).encode())
+    def log_message(self,*_):pass
+   inference=ThreadingHTTPServer(('127.0.0.1',0),Inference);threading.Thread(target=inference.serve_forever,daemon=True).start();env['RPC_CHECK_PORT']=str(inference.server_port)
    backend=start([str(BIN/'cc-central')],env)
    wait(lambda:urllib.request.urlopen(api_url+'/healthz',timeout=1).status==200)
    legacy=str(uuid.uuid4())
@@ -123,12 +143,29 @@ def run():
    login={'user':issued['provider_id'],'metas':{'provider_token':credential}}
    assert hook(login)['reject'] is False
    assert hook({'user':issued['provider_id'],'metas':{'provider_token':'wrong'}})['reject'] is True
+   route='p-'+hashlib.sha256(issued['provider_id'].encode()).hexdigest()[:40]+'.launchpad.internal'
+   request=urllib.request.Request(api_url+'/internal/frp/handler?op=NewProxy',data=json.dumps({'content':{'user':login,'proxy_type':'http','proxy_name':issued['provider_id']+'.inference','custom_domains':[route]}}).encode(),headers={'Content-Type':'application/json'})
+   assert json.load(urllib.request.urlopen(request))['reject'] is False
+   api('POST',path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret'},user='bob',expected=404)
+   api('POST',path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret','base_url':'http://attacker'},expected=400)
+   failed=api('POST',path+'/deployment/rpc-check',{'inference_api_key':'incorrect-inference-key'})
+   assert failed['report']['status']=='failed' and 'incorrect-inference-key' not in str(failed)
+   assert api('GET',path+'/deployment/rpc-check')['running'] is False
+   time.sleep(11)
+   checked=api('POST',path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret'})
+   assert checked['report']['status']=='passed' and all(c['passed'] for c in checked['report']['checks'])
+   assert checked['capacity_accepted'] is False and checked['sales_enabled'] is False
+   assert 'test-inference-secret' not in str(api('GET',path+'/deployment/rpc-check'))
+   assert observed_hosts and all(h==route for h in observed_hosts)
+   assert api('GET',path)['project']['status']=='awaiting-rpc'
+
    saved=issued['launch_id'];time.sleep(11);assert api('GET',path)['project']['launch_id']==saved
    # Contract expiry/refund disables the project without deleting its historic identity.
    rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
    send(provider.address,escrow,'0x'+selector('refundExpired(bytes32)')+registered['onchain_key'][2:])
    refunded=wait(lambda:get_status('refunded'),60);assert refunded['launch_id']==saved
    api('POST',path+'/deployment/bundle',{},expected=409);assert hook(login)['reject'] is True
+   api('POST',path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret'},expected=409)
    # A stake refunded before event finality must not poison the global cursor.
    second=api('POST','/api/v1/projects',{'name':'Refund before finality','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project']
    second_path='/api/v1/projects/'+second['_id']
@@ -148,7 +185,7 @@ def run():
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False
-   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund.')
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry.')
   except Exception:
    log.flush();log.seek(0);print(log.read()[-5000:]);raise
   finally:

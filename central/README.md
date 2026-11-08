@@ -15,3 +15,7 @@ cargo +stable test --manifest-path central/Cargo.toml --locked
 ```
 
 The optional MongoDB-only test uses a disposable replica set on port 27187 (`cargo test -- --ignored`). The full local stake test additionally needs Anvil, built contract bytecode and an `eth-account` environment; see `tests/stake_rust_e2e.py`.
+
+## Functional API verification
+
+`rpc_check.rs` provides owner-only saved functional checks over the assigned FRPS route using a one-time inference key. It uses bounded responses, deadlines and a project lease/cooldown. It never stores the inference key or prompt/output and never changes the project's acceptance/sale state. See [RPC checks](../docs/RPC-CHECKS.md). The additional collection is `rpc_checks`.

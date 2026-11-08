@@ -26,7 +26,7 @@ fn config() -> Result<Config, String> {
 fn value<'a>(p: &'a Document, k: &str) -> Result<&'a str, String> {
     p.get_str(k).map_err(|_| format!("Project missing {k}"))
 }
-async fn eligible(app: &App, p: &Document) -> Result<(), String> {
+pub(crate) async fn eligible(app: &App, p: &Document) -> Result<(), String> {
     if p.get_str("status").ok() != Some("awaiting-rpc")
         || p.get_bool("stake_finalized").ok() != Some(true)
     {

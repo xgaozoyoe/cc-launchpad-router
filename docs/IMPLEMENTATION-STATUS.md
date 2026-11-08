@@ -1,6 +1,6 @@
 # Implementation status
 
-Reviewed 2026-11-07 against repository code, the committed Sepolia deployment/test manifests and the native Ubuntu deployment layout. This is a capability inventory, not a promise of continuously healthy services. Test reports record past results; project status and deadlines can change.
+Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/test manifests and the native Ubuntu deployment layout. This is a capability inventory, not a promise of continuously healthy services. Test reports record past results; project status and deadlines can change.
 
 ## Active application
 
@@ -15,7 +15,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Event monitor | Rust worker reads finalized logs, verifies evidence, atomically reserves IDs, checkpoints and halts on finalized-checkpoint changes |
 | 24h window | Stake block timestamp + 86400; confirmation consumes part of the window; expiry uses chain time |
 | Launch ID | Issued after accepted finalized stake; not permission to sell |
-| Provider setup guide | Opens from My launches; project-bound instructions/checklist and saved status refresh. Owner-only Linux FRPC archive download; historical authenticated login/proxy timestamps. No live heartbeat or Test RPC service |
+| Provider setup guide | Opens from My launches; project-bound instructions/checklist and saved status refresh. Owner-only Linux FRPC archive download; historical authenticated login/proxy timestamps. Saved functional Test RPC results; no live heartbeat or formal capacity acceptance |
 | Collateral display | Locked/free/returned derived from recorded project state; not a wallet balance or a partial unlock ledger |
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
@@ -33,6 +33,10 @@ Ethereum Sepolia chain ID: 11155111. The token is test-only tPRL, not real PRL.
 - [Recorded 2,000 tPRL stake and finalized Launch ID](../config/test-results/sepolia-stake.json)
 
 A stake is collateral and an eligibility requirement; possession of tPRL alone does not prove GPU ownership, model correctness or exclusive available capacity. Contract verification is a trusted verifier action. No production PRL token integration or external contract audit is claimed.
+
+## Functional RPC checks
+
+The owner can run [Test RPC](RPC-CHECKS.md) through the assigned tunnel using a one-time inference key. Health/authentication, advertised model ID, generation, usage arithmetic and SSE are checked, and sanitized results are saved. Passing does not verify underlying weights/capacity, call the contract verifier or enable sales.
 
 ## Agreed product rule, not implemented
 

@@ -41,4 +41,4 @@ The shared FRP transport token and independent project credential are different 
 - `POST /api/v1/projects/<id>/deployment/bundle`: owner-checked private archive payload for the session gateway.
 - Browser equivalents use `/api/central/…`. The gateway emits `application/gzip`, attachment disposition and `Cache-Control: no-store, private`.
 
-RPC/model/capacity acceptance, inference credential custody, buyer credit accounting and sales are separate, unfinished integrations. Downloading a bundle or establishing a tunnel does not verify capacity or mark a launch live.
+Functional [Test RPC checks](RPC-CHECKS.md) can now run and save owner-visible results. Formal model/capacity acceptance, persistent inference credential custody, buyer credit accounting and sales remain separate unfinished integrations. Downloading a bundle or establishing a tunnel does not verify capacity or mark a launch live.
