@@ -36,7 +36,9 @@ def main():
     with urllib.request.urlopen(BASE+'/provider-manage.py',timeout=60) as response:
         (work/'manage.py').write_bytes(response.read())
     project='acc-'+hashlib.sha256(str(root).encode()).hexdigest()[:12]
-    (work/'runtime.json').write_text(json.dumps({'connector':connector.name,'compose_project':project,'managed_model':not bool(a.existing_api_key_file),'api_key_file':str(Path(a.existing_api_key_file).resolve()) if a.existing_api_key_file else None}))
+    previous=json.loads((work/'runtime.json').read_text()) if (work/'runtime.json').exists() else {}
+    if previous.get('connector',connector.name)!=connector.name:raise RuntimeError('This directory belongs to another launch. Use a separate directory.')
+    (work/'runtime.json').write_text(json.dumps({**previous,'connector':connector.name,'compose_project':project,'managed_model':not bool(a.existing_api_key_file),'api_key_file':str(Path(a.existing_api_key_file).resolve()) if a.existing_api_key_file else None}))
     for name,action in [('run','run'),('status','status'),('logs','logs'),('stop','stop')]:
         script=root/(name+'.sh')
         script.write_text('#!/bin/sh\nset -eu\ncd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexec python3 .acc-install/manage.py '+action+' "$@"\n')
@@ -52,26 +54,10 @@ def main():
         key=dict(line.split('=',1) for line in env.read_text().splitlines() if '=' in line)['INFERENCE_API_KEY']
         project='acc-'+hashlib.sha256(str(root).encode()).hexdigest()[:12]
         print('Model commands: cd model && docker compose -p '+project+' logs / stop',flush=True)
-        subprocess.run(['docker','compose','-p',project,'up','--build','-d'],cwd=model,check=True)
-    deadline=time.monotonic()+a.wait_seconds
-    while True:
-        try:
-            req=urllib.request.Request('http://127.0.0.1:8000/v1/models',headers={'Authorization':'Bearer '+key})
-            with urllib.request.urlopen(req,timeout=5) as response:models=json.load(response)
-            if not any(m.get('id')=='qwen3-8b-awq' for m in models.get('data',[])):raise RuntimeError('API does not serve qwen3-8b-awq')
-            break
-        except (urllib.error.URLError,TimeoutError):
-            if time.monotonic()>deadline:raise RuntimeError('Model still starting. Inspect docker compose logs in model/; rerun to continue.')
-            print('Waiting for model download / startup…',flush=True);time.sleep(15)
-    print('3/4 Starting FRPC…',flush=True);subprocess.run(['sh',str(connector/'start.sh')],check=True)
-    time.sleep(5)
-    print('4/4 Testing API through the platform…',flush=True)
-    result=json.loads(api('test',inference_api_key=key));(work/'rpc-result.json').write_text(json.dumps(result,indent=2))
-    report=result.get('report') or {};print('Platform API test:',report.get('status','running'))
-    if report.get('failure'):print(report['failure'])
-    print('Full test results: .acc-install/rpc-result.json\nConnector logs: '+str(connector/'logs/frpc.log'))
-    print('Return to Provider setup to review results and authorize buyer usage. This installer does not approve sales.')
-    if report.get('status')=='failed':raise RuntimeError('Platform test failed; inspect the saved report and rerun after correction.')
+
+    print('Installation prepared. No model or FRPC was started.')
+    print('Start here: ./run.sh --gpu 0 --port 8000' if not a.existing_api_key_file else 'Start connector: ./run.sh --port 8000 (existing API must already be running)')
+    print('Configuration is saved on run. Later use ./run.sh without arguments. Use platform Test RPC after startup.')
 if __name__=='__main__':
     try:main()
     except (RuntimeError,subprocess.CalledProcessError,KeyError) as e:raise SystemExit('Setup stopped: '+str(e))

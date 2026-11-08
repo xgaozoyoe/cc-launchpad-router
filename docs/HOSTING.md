@@ -149,3 +149,16 @@ The installer creates commands in the chosen installation directory:
 - `./stop.sh`: stop FRPC and the managed model without deleting model files or configuration.
 
 Existing-API mode never starts or stops the external model. Keep its API key file available. After reboot, run `./run.sh` from the installation directory; automatic boot startup is not installed. Existing installations can rerun their installation command in the same directory (with the same existing-API option, if used) to receive these commands.
+
+### GPU and port selection at startup
+
+Installation now prepares files only; it does not start services or run the platform test.
+Run `./run.sh --gpu 0 --port 8000` in the first installation directory and
+`./run.sh --gpu 1 --port 8001` in a second directory with its own Launch ID.
+The selected GPU index and localhost port are saved; subsequent `./run.sh`
+uses them. The container keeps its internal port 8000. FRPC and local API
+checks follow the selected host port. Changing options recreates the managed
+container as necessary and restarts the connector; cached model files remain.
+Existing API mode accepts `--port` only and leaves the external model running.
+After startup, run Test RPC on the project page. Use separate directories for
+separate launches. An occupied port not owned by this instance is rejected.
