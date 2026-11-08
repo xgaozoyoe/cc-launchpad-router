@@ -773,3 +773,226 @@ pub(crate) async fn governance(
         json!({"transaction":{"from":wallet,"to":g.contracts["governance"],"chainId":format!("0x{:x}",g.chain_id),"value":"0x0","data":data},"governance":g.contracts["governance"],"operation_id":op_id,"ready_at":timestamp,"step":step,"delay_seconds":delay}),
     ))
 }
+
+/// Read-only chain-derived migration progress; wallet authorization messages do not count as transactions.
+pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult {
+    let id = input["group_id"]
+        .as_str()
+        .ok_or_else(|| error(StatusCode::BAD_REQUEST, "Provide group_id"))?;
+    let g = protocol_groups::select(app, id).map_err(conflict)?;
+    let gate = g
+        .migration_gate
+        .as_deref()
+        .ok_or_else(|| conflict("No migration gate"))?;
+    let rpc = app
+        .stake
+        .as_ref()
+        .ok_or_else(|| conflict("Chain unavailable"))?;
+    let head = rpc
+        .rpc("eth_getBlockByNumber", json!(["latest", false]))
+        .await
+        .map_err(conflict)?;
+    let final_head = rpc
+        .rpc("eth_getBlockByNumber", json!(["finalized", false]))
+        .await
+        .map_err(conflict)?;
+    let number = |v: &Value| {
+        v.as_str()
+            .and_then(|s| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok())
+            .ok_or_else(|| conflict("Invalid block data"))
+    };
+    let chain_now = number(&head["timestamp"])?;
+    let finalized = number(&final_head["number"])?;
+    let delay = abi::uint(
+        &call(
+            app,
+            &g.contracts["governance"],
+            "getMinDelay()",
+            &[],
+            "latest",
+        )
+        .await
+        .map_err(conflict)?,
+    )
+    .map_err(conflict)?;
+    let configure = abi::data("configureMigration(address)", &[abi::addr(gate)]);
+    let salt = format!(
+        "0x{}",
+        hex::encode(Keccak256::digest(
+            format!(
+                "bind-migration:{}:{}:{gate}",
+                g.chain_id, g.contracts["factory"]
+            )
+            .as_bytes()
+        ))
+    );
+    let zero = format!("0x{}", "0".repeat(64));
+    let data = crate::credit_worker::command(vec![
+        "calldata".into(),
+        "hashOperation(address,uint256,bytes,bytes32,bytes32)".into(),
+        g.contracts["factory"].clone(),
+        "0".into(),
+        configure,
+        zero,
+        salt,
+    ])
+    .await
+    .map_err(conflict)?;
+    let operation = rpc
+        .rpc(
+            "eth_call",
+            json!([{"to":g.contracts["governance"],"data":data},"latest"]),
+        )
+        .await
+        .map_err(conflict)?;
+    let op = operation
+        .as_str()
+        .ok_or_else(|| conflict("Invalid operation ID"))?;
+    let ready_at = abi::uint(
+        &call(
+            app,
+            &g.contracts["governance"],
+            "getTimestamp(bytes32)",
+            &[op[2..].into()],
+            "latest",
+        )
+        .await
+        .map_err(conflict)?,
+    )
+    .map_err(conflict)?;
+    let bound = |s: &str| s.eq_ignore_ascii_case(&format!("0x{}", abi::addr(gate)));
+    let latest_bound = bound(
+        &call(
+            app,
+            &g.contracts["factory"],
+            "migrationGate()",
+            &[],
+            "latest",
+        )
+        .await
+        .map_err(conflict)?,
+    );
+    let final_bound = call(
+        app,
+        &g.contracts["factory"],
+        "migrationGate()",
+        &[],
+        "finalized",
+    )
+    .await
+    .ok()
+    .is_some_and(|s| bound(&s));
+    let collection = app.db.collection::<Document>("migration_transactions");
+    if let Some(hash) = input["tx_hash"].as_str() {
+        if hash.len() != 66
+            || !hash.starts_with("0x")
+            || !hash[2..].bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(error(StatusCode::BAD_REQUEST, "Invalid transaction hash"));
+        }
+        let hash = hash.to_lowercase();
+        let tx = rpc
+            .rpc("eth_getTransactionByHash", json!([hash]))
+            .await
+            .map_err(conflict)?;
+        if tx.is_null() {
+            return Err(conflict(
+                "Transaction is not visible to the RPC yet. Hash retained locally; retry tracking.",
+            ));
+        }
+        let target = tx["to"].as_str().unwrap_or("");
+        if !tx["from"]
+            .as_str()
+            .unwrap_or("")
+            .eq_ignore_ascii_case(wallet)
+            || ![g.contracts["governance"].as_str(), gate]
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case(target))
+        {
+            return Err(error(
+                StatusCode::FORBIDDEN,
+                "Transaction does not match the admin and selected target",
+            ));
+        }
+        let selector = |signature: &str| {
+            format!(
+                "0x{}",
+                &hex::encode(Keccak256::digest(signature.as_bytes()))[..8]
+            )
+        };
+        let data = tx["input"].as_str().unwrap_or("");
+        let kind = if target.eq_ignore_ascii_case(gate) {
+            "atomic migration"
+        } else if data.starts_with(&selector(
+            "schedule(address,uint256,bytes,bytes32,bytes32,uint256)",
+        )) {
+            "schedule gate binding"
+        } else if data.starts_with(&selector("execute(address,uint256,bytes,bytes32,bytes32)")) {
+            "execute gate binding"
+        } else {
+            "governance transaction"
+        };
+        collection.update_one(doc!{"_id":format!("{}:{hash}",g.id)},doc!{"$setOnInsert":{"group_id":&g.id,"wallet":wallet,"tx_hash":hash,"kind":kind,"at":now()}}).upsert(true).await.map_err(unavailable)?;
+    }
+    use futures_util::TryStreamExt;
+    let rows = collection
+        .find(doc! {"group_id":&g.id,"wallet":wallet})
+        .sort(doc! {"at":-1})
+        .limit(20)
+        .await
+        .map_err(unavailable)?
+        .try_collect::<Vec<_>>()
+        .await
+        .map_err(unavailable)?;
+    let mut transactions = Vec::new();
+    for row in rows {
+        let hash = row.get_str("tx_hash").map_err(unavailable)?;
+        let receipt = rpc
+            .rpc("eth_getTransactionReceipt", json!([hash]))
+            .await
+            .map_err(conflict)?;
+        let (state, block) = if receipt.is_null() {
+            ("submitted", None)
+        } else {
+            let block = number(&receipt["blockNumber"])?;
+            let canonical = rpc
+                .rpc(
+                    "eth_getBlockByNumber",
+                    json!([receipt["blockNumber"], false]),
+                )
+                .await
+                .map_err(conflict)?;
+            (
+                if canonical["hash"] != receipt["blockHash"] {
+                    "reorged"
+                } else if receipt["status"] != json!("0x1") {
+                    "reverted"
+                } else if block <= finalized {
+                    "finalized"
+                } else {
+                    "mined_waiting_finality"
+                },
+                Some(block),
+            )
+        };
+        transactions.push(
+            json!({"tx_hash":hash,"kind":row.get_str("kind").ok(),"status":state,"block":block}),
+        );
+    }
+    let stage = if final_bound {
+        "gate_bound_finalized"
+    } else if latest_bound {
+        "gate_binding_waiting_finality"
+    } else if ready_at == 0 {
+        "not_scheduled"
+    } else if ready_at == 1 {
+        "executed_waiting_binding"
+    } else if ready_at > chain_now as u128 {
+        "timelock_countdown"
+    } else {
+        "ready_to_execute"
+    };
+    Ok(Json(
+        json!({"group_id":g.id,"stage":stage,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
+    ))
+}

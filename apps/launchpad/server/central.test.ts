@@ -140,3 +140,14 @@ test('modular ledger and migration consent routes enforce authentication and exa
  assert.equal((await centralProxy(make('reserve'),env,transport,async()=>Response.json({}))).status,401);
  assert.equal((await centralProxy(make('execute'),env,transport,session)).status,404);assert.equal(calls,12);
 });
+
+test('migration progress polling requires session and same-origin POST',async()=>{
+ const path=env.APP_ORIGIN+'/api/central/admin/migration-status';let calls=0;
+ const transport:typeof fetch=async(target)=>{calls++;assert.equal(String(target),env.CENTRAL_API_ORIGIN+'/api/v1/admin/migration-status');return Response.json({stage:'timelock_countdown'});};
+ const req=(method='POST',origin=env.APP_ORIGIN)=>new Request(path,{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})});
+ assert.equal((await centralProxy(req(),env,transport,session)).status,200);
+ assert.equal((await centralProxy(req('GET'),env,transport,session)).status,405);
+ assert.equal((await centralProxy(req('POST','https://attacker.example'),env,transport,session)).status,403);
+ assert.equal((await centralProxy(req(),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal(calls,1);
+});

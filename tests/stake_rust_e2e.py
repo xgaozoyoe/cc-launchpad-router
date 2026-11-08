@@ -439,12 +439,22 @@ def run():
     gate=send(admin,None,gate_code+encode(['address','address','address','bytes32'],[factory,escrow,credits,bytes.fromhex(project_key_for_test(third_id))]).hex())['contractAddress']
     candidate['id']='migration-runtime';candidate['migration_gate']=gate;candidate['migration_runtime_hash']='0x'+keccak(bytes.fromhex(rpc('eth_getCode',[gate,'latest'])[2:])).hex();candidate['monitor_enabled']=False
     (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}));rpc('anvil_mine',['0x80'])
+    def migration_status(extra=None,expected=200):return api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime',**(extra or {})},expected=expected)
+    api('POST','/api/v1/admin/migration-status',{'token':'forged','group_id':'migration-runtime'},expected=403)
+    assert migration_status()['stage']=='not_scheduled'
     gov_plan,_=admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'schedule'})
-    send(admin,gov_plan['transaction']['to'],gov_plan['transaction']['data'])
+    scheduled=send(admin,gov_plan['transaction']['to'],gov_plan['transaction']['data'])
+    progress=migration_status({'tx_hash':scheduled['transactionHash']});assert progress['stage']=='timelock_countdown' and progress['remaining_seconds']>0
+    assert progress['transactions'][0]['status']=='mined_waiting_finality'
+    assert migration_status()['transactions'][0]['tx_hash']==scheduled['transactionHash']
     admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'execute'},expected=409)
     rpc('evm_increaseTime',[172801]);rpc('evm_mine',[])
+    assert migration_status()['stage']=='ready_to_execute'
     gov_ready,_=admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'execute'})
-    send(admin,gov_ready['transaction']['to'],gov_ready['transaction']['data'])
+    executed=send(admin,gov_ready['transaction']['to'],gov_ready['transaction']['data'])
+    assert migration_status({'tx_hash':executed['transactionHash']})['stage']=='gate_binding_waiting_finality'
+    rpc('anvil_mine',['0x80'])
+    progress=migration_status();assert progress['stage']=='gate_bound_finalized' and all(t['status']=='finalized' for t in progress['transactions'])
     for contract,role_name in [(escrow,'SETTLER_ROLE'),(credits,'SETTLER_ROLE'),(credits,'OFFER_MANAGER_ROLE')]:send(admin,contract,'0x'+selector('grantRole(bytes32,address)')+keccak(text=role_name).hex()+addr(gate))
     new_vault=contracts['stake_vault'];send(provider.address,token,'0x'+selector('approve(address,uint256)')+addr(new_vault)+word(2000*10**18));send(provider.address,gate,'0x'+selector('fund()'),997*10**9)
     candidate['monitor_enabled']=True

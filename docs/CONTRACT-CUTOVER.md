@@ -65,3 +65,13 @@ Machine-readable local evidence: [modular-migration.json](../config/test-results
 ### Sepolia test-delay correction
 
 The original inactive 48-hour target is superseded by the 60-second test deployment. Its historical receipts remain recorded, but the backend candidate selects only the new target. Any schedule on the old Timelock does not configure the new target; use the new group shown in Admin review. No existing source assets are migrated by this replacement. Backend transaction preparation reads `getMinDelay()` from the deployed contract and validates the chain-specific policy. The UI no longer hard-codes a 48-hour schedule label.
+
+## Migration UI feedback and transaction tracking
+
+The project migration panel shows authorization challenge preparation, waiting for the wallet message signature, server verification and the separate wallet transaction confirmation. Signing a message is never displayed as successful transaction submission. Errors and rejected wallet requests remain beside the controls instead of only at the top of the page.
+
+An authenticated, same-origin `POST /api/central/admin/migration-status` polls current chain state without another wallet signature. The backend derives the fixed operation ID and reads the Timelock timestamp, latest/finalized gate binding and chain time. The UI displays not scheduled, governance countdown, ready to execute, binding mined awaiting finality, and finalized binding. The countdown is approximate between ten-second polls; only a refreshed chain result enables Execute. A submitted transaction disables duplicate submission.
+
+Returned transaction hashes are retained locally and registered with the backend. The backend validates the transaction sender against the configured admin and its destination against the selected governance/gate before saving it in MongoDB `migration_transactions`. Canonical receipts distinguish submitted, mined awaiting finality, finalized, reverted and reorged states. Hashes link to the explorer and show inclusion blocks alongside the finalized head. Local tracking failures retain the hash for retry; they do not imply transaction failure or authorize a replacement. Earlier locally saved governance hashes are recovered when they match the selected target; stale hints can be dismissed without deleting server history.
+
+This endpoint is read-only apart from validated transaction metadata. It cannot schedule governance, move assets or activate a ledger. Existing fresh wallet-signature checks still protect every consequential admin action.

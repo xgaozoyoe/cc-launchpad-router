@@ -141,7 +141,7 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             json!({"challenge_id":id,"message":message,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract}),
         ));
     }
-    if action == "query" || action == "protocol" {
+    if action == "query" || action == "protocol" || action == "migration-status" {
         let token = text(&input, "token")?;
         let valid = app
             .db
@@ -153,6 +153,9 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             .map_err(unavailable)?;
         if valid.is_none() {
             return Err(denied("Connect and sign with the admin wallet"));
+        }
+        if action == "migration-status" {
+            return crate::migration::status(app, &wallet, &input).await;
         }
         if action == "protocol" {
             return Ok(Json(crate::protocol_groups::report(app).await));
