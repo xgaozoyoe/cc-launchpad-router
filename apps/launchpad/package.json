@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test src/state.test.ts src/migration-stage.test.ts src/admin-review.test.ts src/admin-session.test.ts src/credit-purchase.test.ts src/collateral-amount.test.ts src/wallet-network.test.ts src/launch-dashboard.test.ts server/auth.test.ts server/central.test.ts",
+    "test": "node --experimental-strip-types --test src/state.test.ts src/migration-stage.test.ts src/admin-review.test.ts src/admin-session.test.ts src/credit-purchase.test.ts src/collateral-amount.test.ts src/wallet-network.test.ts src/launch-dashboard.test.ts server/auth.test.ts server/central.test.ts server/provider-install.test.ts",
     "build": "tsc --noEmit && npm run check:server && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "check:server": "tsc -p tsconfig.server.json && node scripts/verify-server.mjs"

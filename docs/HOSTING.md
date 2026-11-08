@@ -119,3 +119,22 @@ A connected tunnel proves reachability, not GPU ownership or reserved capacity. 
 Keep the GPU host, model and FRPC online while delivering credits. Stop them with `docker compose -f compose.yaml -f compose.frpc.yaml down` when no delivery commitment is active.
 
 See [operator provisioning and management](FRP-HOSTING.md) and [REST request examples](../README.md#rest-api).
+
+## One-command provider setup
+
+In **Provider setup → Deploy model & connect to the platform**, select **Get install command** after stake confirmation. Copy the generated command and run it from your chosen directory:
+
+```sh
+mkdir my-provider && cd my-provider
+curl -fsSL https://riddle.xyz/install.sh | bash -s -- --launch-id <LAUNCH_ID> --token <DEPLOY_TOKEN>
+```
+
+The current installer supports Linux x86_64 and the registered `qwen3-8b-awq` model. Install Docker Compose, the NVIDIA driver and NVIDIA Container Toolkit first. It does not install system packages or change system services. It builds the pinned vLLM image configuration, downloads model weights, starts inference on localhost:8000, obtains the assigned FRPC binary/configuration/CA, starts the connector and requests a platform API test. Docker images remain managed by Docker; model cache, credentials, scripts and logs are under the chosen directory. A running connector does not approve capacity or open sales.
+
+For an existing API serving that exact model on localhost:8000, append `--existing-api-key-file /path/to/key`. This mode does not deploy or replace the model. The key file contains only the inference API key. Otherwise the generated API key is stored in `model/.env`. Re-running preserves that key and model cache. Do not run two installations against the same port; choose the existing-API mode to reuse a service.
+
+The deployment token is valid for 30 days and scoped to this launch's bundle and RPC-test operations. Every download rechecks ownership and deployment eligibility in the backend. A new command can be generated in the project page. The test result is saved at `.acc-install/rpc-result.json`; connector logs are in `provider-<launch-id>/logs/`. For model logs, run `docker compose -p acc-<directory-hash> logs` in `model/` (the project name is shown by Docker on startup). Stop FRPC using `provider-<launch-id>/stop.sh`. FRPC reboot startup is not installed.
+
+The installer does not grant persistent inference-key storage, buyer-trial permission or paid-inference permission. Review those settings on the provider page after the test. The original stake-based 24-hour acceptance deadline is unchanged.
+
+Maintainers: regenerate the public runtime archive with `python3 scripts/build_provider_runtime.py` after editing the model runtime files.

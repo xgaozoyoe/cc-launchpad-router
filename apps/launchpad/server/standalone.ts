@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, sep } from 'node:path';
 import { handleAuth, validOrigin, configured } from './auth.js';
+import {providerInstall} from './provider-install.js';
 import { centralProxy } from './central.js';
 import type { CentralEnvironment } from './central.js';
 const env:CentralEnvironment={...process.env};
@@ -38,7 +39,8 @@ const server=createServer(async(req,res)=>{
   else if(url.pathname.startsWith('/api/auth/')){
    if(local)response=url.pathname==='/api/auth/session'?await localSession():Response.json({configured:true,localTestAccount:true});
    else response=await handleAuth(request,env);
-  }else if(url.pathname.startsWith('/api/central/'))response=await centralProxy(request,env,fetch,local?localSession:handleAuth);
+  }else if(url.pathname.startsWith('/api/provider-install/'))response=await providerInstall(request,env,fetch,local?localSession:handleAuth);
+  else if(url.pathname.startsWith('/api/central/'))response=await centralProxy(request,env,fetch,local?localSession:handleAuth);
   else if(url.pathname.startsWith('/api/'))response=new Response('Not found',{status:404});
   else if(!['GET','HEAD'].includes(req.method??'GET'))response=new Response('Method not allowed',{status:405});
   else{
