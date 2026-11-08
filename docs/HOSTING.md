@@ -138,3 +138,14 @@ The deployment token is valid for 30 days and scoped to this launch's bundle and
 The installer does not grant persistent inference-key storage, buyer-trial permission or paid-inference permission. Review those settings on the provider page after the test. The original stake-based 24-hour acceptance deadline is unchanged.
 
 Maintainers: regenerate the public runtime archive with `python3 scripts/build_provider_runtime.py` after editing the model runtime files.
+
+### After one-command installation
+
+The installer creates commands in the chosen installation directory:
+
+- `./run.sh`: start the managed model, wait for its authenticated API, then start FRPC. Reuses the saved configuration; no install token is needed.
+- `./status.sh`: show Compose status, authenticated model readiness and FRPC process status. A running process does not prove tunnel health; use platform Test RPC.
+- `./logs.sh`: follow FRPC logs. Use `./logs.sh model` for model logs.
+- `./stop.sh`: stop FRPC and the managed model without deleting model files or configuration.
+
+Existing-API mode never starts or stops the external model. Keep its API key file available. After reboot, run `./run.sh` from the installation directory; automatic boot startup is not installed. Existing installations can rerun their installation command in the same directory (with the same existing-API option, if used) to receive these commands.

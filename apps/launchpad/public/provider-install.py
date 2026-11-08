@@ -32,6 +32,16 @@ def main():
     if manifest['launch_id']!=a.launch_id:raise RuntimeError('Bundle identity mismatch')
     for name,digest in manifest['files'].items():
         if hashlib.sha256((connector/name).read_bytes()).hexdigest()!=digest:raise RuntimeError('Bundle checksum mismatch')
+    # Generate reusable commands before model startup, so failed startup is recoverable.
+    with urllib.request.urlopen(BASE+'/provider-manage.py',timeout=60) as response:
+        (work/'manage.py').write_bytes(response.read())
+    project='acc-'+hashlib.sha256(str(root).encode()).hexdigest()[:12]
+    (work/'runtime.json').write_text(json.dumps({'connector':connector.name,'compose_project':project,'managed_model':not bool(a.existing_api_key_file),'api_key_file':str(Path(a.existing_api_key_file).resolve()) if a.existing_api_key_file else None}))
+    for name,action in [('run','run'),('status','status'),('logs','logs'),('stop','stop')]:
+        script=root/(name+'.sh')
+        script.write_text('#!/bin/sh\nset -eu\ncd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"\nexec python3 .acc-install/manage.py '+action+' "$@"\n')
+        script.chmod(0o700)
+    print('Local commands created: ./run.sh, ./status.sh, ./logs.sh [model], ./stop.sh',flush=True)
     print('2/4 Preparing model API…',flush=True)
     if a.existing_api_key_file:key=Path(a.existing_api_key_file).read_text().strip()
     else:
