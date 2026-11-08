@@ -1,0 +1,21 @@
+{
+  "chain_id": 11155111,
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "contract": "0x4c18665f28ac99745edda9b62cf3668ff0f62faf",
+  "buyer": "0x6de58323455caf502fa201d44f1055ae467a840d",
+  "purchase_tx": "0xc68f5b80cd733d22773452f1ff527d646c57cefb8a3f381e0642ba144918c0b3",
+  "purchase_credits": 1000,
+  "purchase_finalized": true,
+  "request_id": "cbc25dee0b0a381e096bb1a5499596c433dc971e2261ad183426851348999144",
+  "consumed": 2,
+  "reply": "READY",
+  "burn_tx": "0xc39eda80e5fdaa36b8e9a48af2c31f60bb43801cb3d7f992e45c8d2b8c899d4e",
+  "burn_mined": true,
+  "burn_finalized": false,
+  "available": "998",
+  "consumed_pending": "2",
+  "duplicate_request_replayed": true,
+  "checked_at": 1794113184,
+  "prl_locked_raw": "2000000000000000000000",
+  "prl_policy": "Existing stake remains locked"
+}

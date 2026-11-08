@@ -81,3 +81,7 @@ Original project registration, tPRL approval/stake and verifier `verifyProject` 
 - `tests/stake_rust_e2e.py` exercises actual Rust + authenticated MongoDB + disposable Anvil, including buyer proof, purchase finality, inference, replay/recovery, automatic burns, withdrawal fencing, redeposit and revenue claiming.
 
 Proportional PRL freeing remains the agreed future rule: `floor(initial stake × provider-delivered finalized-settled credits / committed supply)`. The existing stake contract cannot implement it, and no “free PRL” is invented from this credit ledger.
+
+## Recorded live Sepolia test
+
+[Live purchase and usage evidence](../config/test-results/paid-credit-sepolia.json): the dedicated test buyer purchased 1,000 credits, waited for finality, received `READY` from the hosted Qwen API, consumed 2 credits and retained 998 available. Replaying the request returned the same cached answer without charging again. The automatic burn transaction mined successfully; the snapshot explicitly records whether its finality had completed. The original 2,000 tPRL deposit was independently checked and remained locked. This live result is separate from the HTTP-fixture Anvil integration tests.
