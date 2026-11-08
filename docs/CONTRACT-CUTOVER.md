@@ -2,6 +2,8 @@
 
 Status: **preparation only; legacy funds and runtime contract configuration remain active.** The modular core is locally tested, but its current version has no migration importer and the Rust/UI purchase/reservation flow is not yet connected. Do not deploy this core as the immutable migration target until these gaps are closed.
 
+The read-only preparation UI/API was deployed to `https://riddle.xyz/#admin` at application revision `1cc8158d6ca13eb42f205423cde54aaa097e8fdb`. Health and unauthenticated rejection were checked; the browser showed the new readiness section. The live signed admin check requires the user’s wallet and was not performed by the agent. Chain and service configuration fingerprints remained unchanged.
+
 ## What is connected now
 
 An admin who has authenticated with the configured wallet can run `POST /api/v1/admin/protocol` with their existing account-bound session token. The same-origin Node proxy exposes this as `/api/central/admin/protocol`. The admin page shows the active legacy stake address, staged candidates and unresolved cutover requirements.

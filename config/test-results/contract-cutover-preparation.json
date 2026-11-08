@@ -35,5 +35,15 @@
     "per-project contract-group monitors",
     "modular purchasing/reservation/settlement app integration",
     "holder consents and migration rehearsal"
-  ]
+  ],
+  "readiness_release": {
+    "application_revision": "1cc8158d6ca13eb42f205423cde54aaa097e8fdb",
+    "origin": "https://riddle.xyz",
+    "health": "ok",
+    "unauthenticated_protocol_post": 401,
+    "configuration_fingerprints": "unchanged",
+    "browser_verified": "Admin page renders readiness section and requires admin-wallet sign-in before checking",
+    "live_signed_admin_audit": "not run; requires user browser wallet",
+    "rollback_directory": "/home/xgao/services/cc-launchpad/private/readiness-backup-20261108T082254Z"
+  }
 }
