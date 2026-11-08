@@ -1,3 +1,4 @@
+import {pendingStake} from './pending-stake.ts';
 import type {ServerProject} from './server-projects.ts';
 export type LaunchGroup='all'|'draft'|'staking'|'rpc'|'live'|'inactive'|'other';
 export const launchGroups:ReadonlyArray<{id:LaunchGroup;label:string}>=[{id:'all',label:'All projects'},{id:'draft',label:'Drafts'},{id:'staking',label:'Pending stake'},{id:'rpc',label:'Setup & acceptance'},{id:'live',label:'Selling credits'},{id:'inactive',label:'Inactive'}];
@@ -40,18 +41,20 @@ export function launchProgress(project:ServerProject):ProgressStep[]{
  const current=completed.findIndex(done=>!done);
  const details=[
   'Project saved to your account',
-  project.stake_finalized?'Finalized stake recorded':'Submit stake and wait for chain finality',
+  project.stake_finalized?'Finalized stake recorded':stakePending(project)?'Stake submitted; waiting for confirmation and finality. Do not stake again.':'Submit stake and wait for chain finality',
   project.progress?.last_proxy_at?'Proxy registration recorded; not continuous health monitoring':'Start the assigned FRPC bundle on your model host',
   rpc?'Saved API checks passed':project.progress?.rpc_status==='failed'?'Last API test failed; correct the issue and retest':'Run Test RPC through the assigned tunnel',
   accepted||live?'On-chain acceptance finalized':project.status==='verification-pending'?'verifyProject submitted; waiting for finality':project.capacity_approval?'Manual demo capacity approved; admin must sign verifyProject':'Admin capacity approval and on-chain verification required',
   live?'Credit sales open':'Create an on-chain credit offer and enable paid inference after acceptance'
  ];
- return ['Project created','Stake finalized','FRPC registered','API checks passed','Capacity & on-chain acceptance','Credit sales'].map((label,i)=>({label,state:completed[i]?'complete':inactive?'blocked':i===current?'current':'upcoming',detail:details[i]}));
+ return ['Project created',project.stake_finalized?'Stake finalized':stakePending(project)?'Waiting for stake confirmation':'Submit stake','FRPC registered','API checks passed','Capacity & on-chain acceptance','Credit sales'].map((label,i)=>({label,state:completed[i]?'complete':inactive?'blocked':i===current?'current':'upcoming',detail:details[i]}));
 }
+export function stakePending(project:ServerProject){return !project.stake_finalized&&(project.status==='stake-submitted'||!!pendingStake(project._id));}
 export function projectBadge(project:ServerProject){
+ if(stakePending(project))return 'Waiting for stake confirmation';
  if(project.sales_enabled)return 'Selling test credits';
  if(project.status!=='awaiting-rpc')return launchLabel(project.status);
  if(project.capacity_approval)return 'Capacity approved · awaiting on-chain verification';
  return project.progress?.rpc_status==='passed'?'Awaiting capacity acceptance':project.progress?.last_proxy_at?'Awaiting API checks':'Awaiting connector';
 }
-export function projectAction(project:ServerProject){return project.status==='awaiting-rpc'&&project.progress?.rpc_status==='passed'?'View verification results':launchAction(project.status);}
+export function projectAction(project:ServerProject){if(stakePending(project))return 'Track stake confirmation';return project.status==='awaiting-rpc'&&project.progress?.rpc_status==='passed'?'View verification results':launchAction(project.status);}

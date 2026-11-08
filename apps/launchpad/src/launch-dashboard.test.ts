@@ -41,3 +41,16 @@ test('an accepted project advances the sales checklist only with the backend off
  assert.match(projectBadge(p),/Selling test credits/);assert.equal(launchProgress(p)[5].state,'complete');
  assert.equal(filterLaunches([p],'live','').length,1);assert.equal(filterLaunches([p],'rpc','').length,0);
 });
+
+test('locally submitted stake overrides stale server state until finality',async()=>{
+ const {savePendingStake,clearPendingStake}=await import('./pending-stake.ts');
+ const p={...projects[0],_id:'pending-regression',status:'awaiting-stake'};
+ savePendingStake(p._id,'0x123');
+ try{
+  assert.equal(projectAction(p),'Track stake confirmation');
+  assert.equal(projectBadge(p),'Waiting for stake confirmation');
+  assert.equal(launchProgress(p)[1].label,'Waiting for stake confirmation');
+  assert.equal(launchProgress({...p,stake_finalized:true})[1].state,'complete');
+ }finally{clearPendingStake(p._id);}
+ assert.equal(projectAction(p),'Stake tPRL');
+});
