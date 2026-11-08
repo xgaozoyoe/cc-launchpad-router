@@ -10,5 +10,13 @@
   "production_policy_seconds": 172800,
   "new_group": "sepolia-modular-60s-20261108",
   "legacy_assets_moved": false,
-  "governance_scheduled_by_agent": false
+  "governance_scheduled_by_agent": false,
+  "application_revision": "2342fb4ca882e934f531a1bae42dc89dd864f456",
+  "public_health": 200,
+  "live_schedule_eth_call": {
+    "59_seconds": "rejected",
+    "60_seconds": "accepted"
+  },
+  "live_legacy_stake_principal_wei": "2000000000000000000000",
+  "live_legacy_stake_state": 3
 }
