@@ -36,7 +36,7 @@ def run():
    if 'error' in d:raise AssertionError(d['error'])
    return d['result']
   def send(sender,to,data,value=0):
-   tx={'from':sender,'data':data,'gas':'0x800000','value':hex(value)}
+   tx={'from':sender,'data':data,'gas':'0x1400000','value':hex(value)}
    if to:tx['to']=to
    h=rpc('eth_sendTransaction',[tx]);r=wait(lambda:rpc('eth_getTransactionReceipt',[h]));assert r['status']=='0x1';return r
   selector=lambda s:keccak(text=s)[:4].hex()
@@ -206,7 +206,8 @@ def run():
     code=json.loads(next((ROOT/'contracts/out').glob('*/'+name+'.json')).read_text())['bytecode']['object']
     return send(admin,None,code+encode(types,values).hex())
    gov=deploy_modular('LaunchpadTimelock',['address[]','address[]'],[[admin],[admin]])['contractAddress']
-   candidate_receipt=deploy_modular('TestnetProtocolFactory',['address']*6,[token,gov,admin,admin,admin,admin])
+   modules=deploy_modular('ModuleDeployer',[],[])['contractAddress']
+   candidate_receipt=deploy_modular('TestnetProtocolFactory',['address']*7,[token,gov,admin,admin,admin,settler.address,modules])
    factory=candidate_receipt['contractAddress']
    contracts={'factory':factory,'governance':gov}
    for component,getter in [('registry','registry()'),('credit_token','creditToken()'),('usage_escrow','usageEscrow()'),('payment_escrow','paymentEscrow()'),('stake_vault','stakeVault()'),('sale_router','saleRouter()'),('settlement_module','settlementModule()')]:
@@ -430,6 +431,69 @@ def run():
    assert int(rpc('eth_call',[{'to':credits,'data':'0x'+selector('revenue(address)')+addr(provider.address)},'latest']),16)==3*10**9
    send(provider.address,credits,'0x'+selector('claimRevenue()'))
    print('PASS paid credits: wallet signatures, immutable purchase terms, finality balance fence, real inference, idempotent recovery, persisted batch burn, revenue, withdrawal reconciliation and redeposit; existing PRL unchanged.')
+   if not progressive:
+    # Return the 497 wallet tokens so the fixed-source migration has no external-token liability.
+    tx=api('POST',credit_path+'/deposit',{'quantity':497},user='paid-buyer')['transaction'];send(buyer.address,credits,tx['data']);rpc('anvil_mine',['0x80'])
+    assert api('GET',credit_path,user='paid-buyer')['available']=='997'
+    gate_code=json.loads((ROOT/'contracts/out/LegacyMigrationGate.sol/LegacyMigrationGate.json').read_text())['bytecode']['object']
+    gate=send(admin,None,gate_code+encode(['address','address','address','bytes32'],[factory,escrow,credits,bytes.fromhex(project_key_for_test(third_id))]).hex())['contractAddress']
+    candidate['id']='migration-runtime';candidate['migration_gate']=gate;candidate['migration_runtime_hash']='0x'+keccak(bytes.fromhex(rpc('eth_getCode',[gate,'latest'])[2:])).hex();candidate['monitor_enabled']=False
+    (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}));rpc('anvil_mine',['0x80'])
+    gov_plan,_=admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'schedule'})
+    send(admin,gov_plan['transaction']['to'],gov_plan['transaction']['data'])
+    admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'execute'},expected=409)
+    rpc('evm_increaseTime',[172801]);rpc('evm_mine',[])
+    gov_ready,_=admin_sign('migration-governance',{'project_id':third_id,'group_id':'migration-runtime','step':'execute'})
+    send(admin,gov_ready['transaction']['to'],gov_ready['transaction']['data'])
+    for contract,role_name in [(escrow,'SETTLER_ROLE'),(credits,'SETTLER_ROLE'),(credits,'OFFER_MANAGER_ROLE')]:send(admin,contract,'0x'+selector('grantRole(bytes32,address)')+keccak(text=role_name).hex()+addr(gate))
+    new_vault=contracts['stake_vault'];send(provider.address,token,'0x'+selector('approve(address,uint256)')+addr(new_vault)+word(2000*10**18));send(provider.address,gate,'0x'+selector('fund()'),997*10**9)
+    candidate['monitor_enabled']=True
+    (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}));rpc('anvil_mine',['0x80'])
+    frozen,_=admin_sign('migration-freeze',{'project_id':third_id,'group_id':'migration-runtime'});assert frozen['phase']=='frozen'
+    api('POST',credit_path+'/infer',{**request,'request_id':str(uuid.uuid4())},user='paid-buyer',expected=409)
+    plan_result,_=admin_sign('migration-plan',{'project_id':third_id,'group_id':'migration-runtime','holders':buyer.address})
+    consent=api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='paid-buyer')
+    assert consent['remaining_credits']=='997' and consent['historical_consumed']=='3' and not consent['signed']
+    api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='bob',expected=409)
+    digest=rpc('eth_call',[{'to':gate,'data':'0x'+selector('consentDigest(bytes32,uint64)')+encode(['bytes32','uint64'],[bytes.fromhex(consent['plan_hash'][2:]),consent['chain_expiry']]).hex()},'latest'])
+    wrong_signature=Account._sign_hash(bytes.fromhex(digest[2:]),provider.key).signature.hex()
+    api('POST','/api/v1/modular/'+third_id+'/consent',{'plan_hash':consent['plan_hash'],'signature':'0x'+wrong_signature.removeprefix('0x')},user='paid-buyer',expected=403)
+    signature=Account._sign_hash(bytes.fromhex(digest[2:]),buyer.key).signature.hex()
+    api('POST','/api/v1/modular/'+third_id+'/consent',{'plan_hash':consent['plan_hash'],'signature':'0x'+signature.removeprefix('0x')},user='paid-buyer')
+    assert api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='paid-buyer')['signed'] is True
+    prepared_migration,_=admin_sign('migration-prepare',{'project_id':third_id,'group_id':'migration-runtime'})
+    assert prepared_migration['simulation']=='passed' and prepared_migration['transaction']['to']==gate.lower()
+    migration_receipt=send(admin,gate,prepared_migration['transaction']['data']);rpc('anvil_mine',['0x80'])
+    def activate_modular():
+     value,_=admin_sign('migration-activate',{'project_id':third_id,'group_id':'migration-runtime','tx_hash':migration_receipt['transactionHash']},expected=200)
+     return value
+    # Allow group log indexing to catch up; only the specific monitor-behind error is retried.
+    # Poll read-only group monitor progress before using the one-shot admin authorization.
+    def group_indexed():
+     report=api('POST','/api/v1/admin/protocol',{'token':session['token']})
+     row=report['candidates'][0].get('monitor') or {}
+     if report['candidates'][0].get('monitor_error'):print('Group monitor diagnostic:',report['candidates'][0]['monitor_error'],flush=True)
+     return row.get('block',0)>=int(migration_receipt['blockNumber'],16)
+    wait(group_indexed,150)
+    activated=activate_modular();assert activated['phase']=='active'
+    assert api('GET','/api/v1/status')['chain']['staking_contract']==escrow.lower()
+    mpath='/api/v1/modular/'+third_id
+    state=api('GET',mpath,user='paid-buyer');assert state['protocol']=='modular' and state['available']=='997' and state['finalized']['burned']=='3'
+    api('POST',credit_path+'/purchase',{'quantity':1},user='paid-buyer',expected=409)
+    purchase=api('POST',mpath+'/purchase',{'quantity':100},user='paid-buyer')['transaction'];purchase_tx=send(buyer.address,purchase['to'],purchase['data'],int(purchase['value'],16))
+    api('POST',mpath+'/transactions',{'kind':'purchase','quantity':100,'tx_hash':purchase_tx['transactionHash']},user='paid-buyer');rpc('anvil_mine',['0x80'])
+    assert api('GET',mpath,user='paid-buyer')['available']=='1097'
+    reservation=api('POST',mpath+'/reserve',{'maximum':128},user='paid-buyer');reserve_tx=send(buyer.address,reservation['transaction']['to'],reservation['transaction']['data'])
+    api('POST',mpath+'/transactions',{'kind':'reserve','reservation_id':reservation['reservation_id'],'tx_hash':reserve_tx['transactionHash']},user='paid-buyer');rpc('anvil_mine',['0x80'])
+    output=api('POST',mpath+'/infer',{'reservation_id':reservation['reservation_id'],'prompt':'Return the integration answer.'},user='paid-buyer');assert output['result']['usage']['completion_tokens']==3
+    repeated=api('POST',mpath+'/infer',{'reservation_id':reservation['reservation_id'],'prompt':'Do not run twice.'},user='paid-buyer');assert repeated['replayed'] is True
+    def modular_burned():
+     rpc('anvil_mine',['0x80']);time.sleep(1);value=api('GET',mpath,user='paid-buyer');return value if value['finalized']['burned']=='6' else False
+    modular_state=wait(modular_burned,150);assert modular_state['available']=='1094'
+    collateral=api('GET',third_path+'/collateral');assert collateral['protocol']=='modular' and collateral['finalized']['free']=='12000000000000000'
+    withdraw=api('POST',third_path+'/collateral/withdraw',{'amount_raw':'1000000000000000'})['transaction'];withdrawal_tx=send(provider.address,withdraw['to'],withdraw['data']);api('POST',third_path+'/collateral/submit',{'tx_hash':withdrawal_tx['transactionHash']});rpc('anvil_mine',['0x80'])
+    collateral=api('GET',third_path+'/collateral');assert collateral['finalized']['returned']=='1000000000000000'
+    print('PASS full V1 migration + real Rust modular purchase/reserve/inference/burn/PRL withdrawal; identity and legacy source preserved.',flush=True)
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False

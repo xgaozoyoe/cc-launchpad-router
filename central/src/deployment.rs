@@ -27,6 +27,10 @@ fn value<'a>(p: &'a Document, k: &str) -> Result<&'a str, String> {
     p.get_str(k).map_err(|_| format!("Project missing {k}"))
 }
 pub(crate) async fn eligible(app: &App, p: &Document) -> Result<(), String> {
+    if p.get_str("contract_group").is_ok() {
+        return crate::modular::service(app, p).await;
+    }
+
     if !matches!(
         p.get_str("status").unwrap_or(""),
         "awaiting-rpc" | "verification-pending" | "accepted"

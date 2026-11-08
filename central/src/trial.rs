@@ -196,20 +196,22 @@ pub async fn handle(app: &App, user: &str, id: &str, method: &str, body: &[u8]) 
             "Chain verification unavailable",
         )
     })?;
-    let finalized = service
-        .state(p.get_str("onchain_key").map_err(unavailable)?, "finalized")
-        .await
-        .map_err(|_| {
-            error(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Finalized chain state unavailable",
-            )
-        })?;
-    if finalized.0 != 3 {
-        return Err(error(
-            StatusCode::CONFLICT,
-            "On-chain verification is not finalized",
-        ));
+    if p.get_str("contract_group").is_err() {
+        let finalized = service
+            .state(p.get_str("onchain_key").map_err(unavailable)?, "finalized")
+            .await
+            .map_err(|_| {
+                error(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "Finalized chain state unavailable",
+                )
+            })?;
+        if finalized.0 != 3 {
+            return Err(error(
+                StatusCode::CONFLICT,
+                "On-chain verification is not finalized",
+            ));
+        }
     }
     let key = crate::rpc_credentials::trial_key(&p).map_err(|e| error(StatusCode::CONFLICT, &e))?;
     if method == "GET" {

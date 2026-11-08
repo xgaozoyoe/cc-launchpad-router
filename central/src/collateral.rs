@@ -61,6 +61,9 @@ pub async fn handle(
         .await
         .map_err(unavailable)?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
+    if p.get_str("contract_group").is_ok() {
+        return crate::modular::collateral(app, &p, action, method, body).await;
+    }
     let service = app
         .stake
         .as_ref()

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {MigrationBound} from "./MigrationBound.sol";
 import {GovernedAccess} from "./GovernedAccess.sol";
 
 /// @notice Stable project terms. Module changes cannot edit an existing commitment.
-contract ProjectRegistry is GovernedAccess {
+contract ProjectRegistry is MigrationBound, GovernedAccess {
     bytes32 public constant REGISTRAR_ROLE = keccak256("REGISTRAR_ROLE");
     bytes32 public constant ACCEPTANCE_ROLE = keccak256("ACCEPTANCE_ROLE");
     bytes32 public constant GUARDIAN_ROLE = keccak256("GUARDIAN_ROLE");
@@ -65,6 +66,31 @@ contract ProjectRegistry is GovernedAccess {
         require(projects[id].status == Status.None, "Already registered");
         projects[id] = Project(provider, stake, supply, price, model, 0, 0, Status.Registered, false, false);
         emit ProjectRegistered(id, provider, stake, supply, price, model);
+    }
+
+    /// @notice Gate is fixed and project import is one-time; original verification history is retained.
+    function importProject(bytes32 id, Project calldata original) external onlyMigrationGate {
+        require(id != 0 && projects[id].status == Status.None, "Project already exists");
+        require(
+            original.provider != address(0) && original.stakeAmount > 0 && original.committedCredits > 0
+                && original.committedCredits <= 1e9 && original.weiPerCredit > 0 && original.weiPerCredit <= 1 ether
+                && original.modelHash != 0,
+            "Invalid imported terms"
+        );
+        require(
+            original.status == Status.Verified && original.stakedAt > 0
+                && original.deadline == original.stakedAt + 24 hours && !original.servicePaused,
+            "Invalid legacy acceptance"
+        );
+        projects[id] = original;
+        emit ProjectRegistered(
+            id,
+            original.provider,
+            original.stakeAmount,
+            original.committedCredits,
+            original.weiPerCredit,
+            original.modelHash
+        );
     }
 
     function markStaked(bytes32 id) external {

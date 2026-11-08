@@ -1,6 +1,6 @@
 # Modular contract core — development reference
 
-Status: local implementation only. **Not deployed, not selected by the live application, no legacy funds moved.** This replaces the earlier combined V2 prototype as the architecture direction. See [architecture and trust boundaries](CONTRACT-ARCHITECTURE.zh-CN.md) and [test evidence](../config/test-results/modular-protocol.json).
+Status: contracts, atomic migration, Rust settlement/monitor and UI implemented and locally integrated. **Existing funds remain on V1 until an explicit finalized migration.** See [execution runbook](CONTRACT-CUTOVER.md) for deployment versus activation boundaries. This replaces the earlier combined V2 prototype as the architecture direction. See [architecture and trust boundaries](CONTRACT-ARCHITECTURE.zh-CN.md) and [test evidence](../config/test-results/modular-protocol.json).
 
 ## Code and ownership
 
@@ -16,9 +16,9 @@ All new contracts are under `contracts/src/modular/`; V1 and the earlier progres
 | SaleRouter | No retained funds or balances | Buyer transaction forwards all ETH |
 | SettlementModule | No retained funds or balances | Trusted operator submits provider receipt or known failure |
 | LaunchpadTimelock / GovernedAccess | Fixed 48h governance / pinned role administrator | Reviewed proposer/executor, expected to be multisig for deployment |
-| TestnetProtocolFactory | Sealed address manifest, no admin left | Constructor only; chain 31337 or 11155111 |
+| TestnetProtocolFactory | Sealed address manifest, no admin left | Constructor bootstrap plus one-time timelocked migration-gate binding; chain 31337 or 11155111 |
 
-The factory accepts an already deployed LaunchpadTimelock and PRL token, then deploys all peers, binds them once and seals role administration. A factory getter continues to identify the **initial** router/module after rotation; current authorization is determined by stable-contract role events, not by treating the initial getter as an active-module registry. No production deployment script or migration permission is implied by this testnet factory.
+The factory accepts an already deployed LaunchpadTimelock and PRL token, then deploys all peers, binds them once and seals role administration. A factory getter continues to identify the **initial** router/module after rotation; current authorization is determined by stable-contract role events, not by treating the initial getter as an active-module registry. `DeployModular.s.sol` deploys an inactive testnet target. It grants no legacy migration roles and moves no legacy assets. `LegacyMigrationGate` imports one fixed project atomically after timelocked installation, exact provider allowance/prefund and every historical holder’s consent.
 
 ## Local verification
 

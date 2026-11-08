@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {MigrationBound} from "./MigrationBound.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {GovernedAccess} from "./GovernedAccess.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -11,7 +12,7 @@ import {CreditToken} from "./CreditToken.sol";
 import {PaymentEscrow} from "./PaymentEscrow.sol";
 
 /// @notice Stable buyer authorizations, reservations, burns and delivery accounting.
-contract UsageEscrow is GovernedAccess, ReentrancyGuard, ERC1155Holder, EIP712 {
+contract UsageEscrow is MigrationBound, GovernedAccess, ReentrancyGuard, ERC1155Holder, EIP712 {
     bytes32 public constant SETTLEMENT_ROLE = keccak256("SETTLEMENT_ROLE");
     bytes32 public constant RESERVATION_TYPEHASH = keccak256(
         "Reservation(bytes32 project,address buyer,bytes32 reservationId,uint256 maximum,uint256 nonce,uint64 expiresAt)"
@@ -37,6 +38,8 @@ contract UsageEscrow is GovernedAccess, ReentrancyGuard, ERC1155Holder, EIP712 {
     mapping(address => uint256) public nonces;
     mapping(bytes32 => bool) public usageSettled;
     mapping(bytes32 => uint256) public providerDelivered;
+    mapping(bytes32 => bool) public baselineImported;
+    mapping(bytes32 => mapping(address => bool)) public accountImported;
     ProjectRegistry public immutable registry;
     CreditToken public immutable token;
     PaymentEscrow public paymentEscrow;
@@ -81,6 +84,38 @@ contract UsageEscrow is GovernedAccess, ReentrancyGuard, ERC1155Holder, EIP712 {
             "Wrong peers"
         );
         paymentEscrow = payment;
+    }
+
+    function importDeliveryBaseline(bytes32 project, uint256 delivered) external onlyMigrationGate {
+        require(
+            !baselineImported[project] && providerDelivered[project] == 0
+                && delivered <= registry.project(project).committedCredits,
+            "Invalid delivery baseline"
+        );
+        baselineImported[project] = true;
+        providerDelivered[project] = delivered;
+    }
+
+    /// @dev Token mint callback has already credited exactly the unconsumed amount.
+    function importAccountHistory(
+        bytes32 project,
+        address buyer,
+        uint256 locked,
+        uint256 consumed,
+        uint256 deposited,
+        uint256 withdrawn
+    ) external onlyMigrationGate {
+        Account storage a = accounts[project][buyer];
+        require(
+            baselineImported[project] && !accountImported[project][buyer] && a.locked == locked && a.reserved == 0
+                && a.consumed == 0 && a.withdrawn == 0 && a.deposited == locked
+                && deposited == locked + consumed + withdrawn,
+            "Invalid account import"
+        );
+        accountImported[project][buyer] = true;
+        a.consumed = consumed;
+        a.deposited = deposited;
+        a.withdrawn = withdrawn;
     }
 
     function reservationDigest(

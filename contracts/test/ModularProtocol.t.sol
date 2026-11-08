@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LaunchpadTimelock} from "../src/modular/LaunchpadTimelock.sol";
 import {TestPRL} from "../src/TestPRL.sol";
+import {ModuleDeployer} from "../src/modular/ModuleDeployer.sol";
 import {ProjectRegistry} from "../src/modular/ProjectRegistry.sol";
 import {CreditToken} from "../src/modular/CreditToken.sol";
 import {PaymentEscrow} from "../src/modular/PaymentEscrow.sol";
@@ -46,8 +47,7 @@ contract ReentrantRevenueProvider {
         if (!attempted) attempted = true;
         try payment.claimRevenue(project, 1) {
             reentrySucceeded = true;
-        }
-            catch {}
+        } catch {}
     }
 }
 
@@ -82,7 +82,15 @@ contract ModularProtocolTest {
         governance = new LaunchpadTimelock(proposers, proposers);
         bytes memory init = abi.encodePacked(
             vm.getCode("TestnetProtocolFactory.sol:TestnetProtocolFactory"),
-            abi.encode(IERC20(address(prl)), governance, address(this), address(this), address(this), address(this))
+            abi.encode(
+                IERC20(address(prl)),
+                governance,
+                address(this),
+                address(this),
+                address(this),
+                address(this),
+                address(new ModuleDeployer())
+            )
         );
         address created;
         assembly { created := create(0, add(init, 32), mload(init)) }

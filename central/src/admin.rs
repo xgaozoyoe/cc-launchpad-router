@@ -113,7 +113,21 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         .ok_or_else(|| denied("Chain is not configured"))?;
     if action == "challenge" {
         let intent = text(&input, "intent")?;
-        if !["login", "capacity", "prepare", "submit", "retest"].contains(&intent) {
+        if ![
+            "login",
+            "capacity",
+            "prepare",
+            "submit",
+            "retest",
+            "migration-freeze",
+            "migration-resume",
+            "migration-activate",
+            "migration-plan",
+            "migration-prepare",
+            "migration-governance",
+        ]
+        .contains(&intent)
+        {
             return Err(denied("Unknown admin operation"));
         }
         let payload = input.get("payload").cloned().unwrap_or(json!({}));
@@ -143,10 +157,30 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         if action == "protocol" {
             return Ok(Json(crate::protocol_groups::report(app).await));
         }
-        let mut rows=app.db.collection::<Document>("projects").find(doc!{}).projection(doc!{"_id":1,"name":1,"model_id":1,"status":1,"stake_finalized":1,"provider_id":1,"wallet_address":1,"launch_id":1,"rpc_deadline":1,"onchain_key":1,"capacity_approval":1,"verification_tx_hash":1}).sort(doc!{"created_at":-1}).limit(100).await.map_err(unavailable)?.try_collect::<Vec<_>>().await.map_err(unavailable)?;
+        let mut rows=app.db.collection::<Document>("projects").find(doc!{}).projection(doc!{"_id":1,"name":1,"model_id":1,"status":1,"stake_finalized":1,"provider_id":1,"wallet_address":1,"launch_id":1,"rpc_deadline":1,"onchain_key":1,"capacity_approval":1,"verification_tx_hash":1,"contract_group":1,"ledger_epoch":1,"migration_phase":1,"migration_target_group":1}).sort(doc!{"created_at":-1}).limit(100).await.map_err(unavailable)?.try_collect::<Vec<_>>().await.map_err(unavailable)?;
         crate::project_progress(app, &mut rows)
             .await
             .map_err(unavailable)?;
+        for p in &mut rows {
+            let positions = app
+                .db
+                .collection::<Document>("credit_positions")
+                .find(doc! {"project_id":p.get_str("_id").unwrap_or("")})
+                .projection(doc! {"wallet":1})
+                .limit(32)
+                .await
+                .map_err(unavailable)?
+                .try_collect::<Vec<_>>()
+                .await
+                .map_err(unavailable)?;
+            p.insert(
+                "migration_holders",
+                positions
+                    .iter()
+                    .filter_map(|r| r.get_str("wallet").ok().map(str::to_owned))
+                    .collect::<Vec<_>>(),
+            );
+        }
         for p in &mut rows {
             p.insert(
                 "rpc_retest_available",
@@ -154,7 +188,7 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
             );
         }
         return Ok(Json(
-            json!({"projects":rows,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract,"sales_enabled":false}),
+            json!({"projects":rows,"admin_address":wallet,"chain_id":s.config.chain_id,"contract":s.config.staking_contract,"sales_enabled":false,"candidate_groups":crate::protocol_groups::load(s.config.chain_id).unwrap_or_default().into_iter().map(|g|g.id).collect::<Vec<_>>()}),
         ));
     }
     let id = text(&input, "challenge_id")?;
@@ -221,6 +255,18 @@ pub async fn handle(app: &App, user: &str, action: &str, method: &str, body: &[u
         .await
         .map_err(unavailable)?
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
+    if action.starts_with("migration-") {
+        app.db.collection::<Document>("admin_audit").insert_one(doc!{"project_id":project,"wallet":&wallet,"account":user,"operation":action,"challenge_id":id,"at":now(),"stage":"requested"}).await.map_err(unavailable)?;
+    }
+    if action == "migration-governance" {
+        return crate::migration::governance(app, &wallet, &p, &payload).await;
+    }
+    if ["migration-plan", "migration-prepare"].contains(&action) {
+        return crate::migration::plan_admin(app, &wallet, action, &p, &payload).await;
+    }
+    if ["migration-freeze", "migration-resume", "migration-activate"].contains(&action) {
+        return crate::migration::admin(app, &wallet, action, &p, &payload).await;
+    }
     if action == "retest" {
         let key = crate::rpc_credentials::load(&p).map_err(|e| error(StatusCode::CONFLICT, &e))?;
         app.db.collection::<Document>("admin_audit").insert_one(doc!{"project_id":project,"operation":"rpc-retest","wallet":&wallet,"account":user,"at":now(),"challenge_id":id}).await.map_err(unavailable)?;

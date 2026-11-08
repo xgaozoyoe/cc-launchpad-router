@@ -1,6 +1,6 @@
 # 合约架构决策：稳定资产与账本，可替换业务模块
 
-状态：2026-11-08，拆分合约核心已有本地实现和测试，尚未部署或接入线上后台。此设计取代同仓库 `LaunchStakeV2` / `ComputeCreditsV2` 原型的部署方向；原型只保留为比例计算和测试参考。现有线上 V1 不变。
+状态：2026-11-08，拆分合约、原子迁移、Rust 账本/监听/结算和网页交互已实现并通过本地完整联调。部署与迁移是不同步骤；现有项目只有完成原子迁移及 finalized 激活后才使用新账本。此设计取代同仓库 `LaunchStakeV2` / `ComputeCreditsV2` 原型的部署方向；原型只保留为比例计算和测试参考。现有线上 V1 不变。
 
 ## 1. 目标与边界
 
@@ -136,7 +136,7 @@ MigrationImporter 是单用途、受限项目/计划 hash/数量/期限的导入
 7. Sepolia 小额独立项目演练，再生成现有项目最新冻结快照和具体待签交易供审核。
 8. 最后才执行现有项目迁移。
 
-当前进度：第 2 步的核心绑定/权限/守恒测试和第 3 步的本地 Timelock 轮换已通过；第 5 步仅完成 Anvil + 带鉴权 HTTP fixture 的合约交易联调，尚未接入真实 Rust API/网页。第 4、6、7、8 步尚未完成。不能将本地测试当成已上线或已具备迁移能力。
+当前进度：原子迁移、全持有人 EIP-712 同意、Rust 分组监听和新账本购买/预留/推理/销毁/提款已完成本地联调。Sepolia 暂用用户明确批准的测试单签治理提案人，保留固定 48h Timelock。实际资金迁移必须按 [执行手册](CONTRACT-CUTOVER.md) 完成，不能把部署目标或本地测试当成已迁移。
 
 ## 8. 必须保留的证据
 
@@ -153,7 +153,7 @@ MigrationImporter 是单用途、受限项目/计划 hash/数量/期限的导入
 
 - `ProjectRegistry` 固定经济条款并执行 24h deadline；验收暂用可治理轮换的 ACCEPTANCE_ROLE，独立 AcceptanceModule 尚未实现。
 - `CreditToken` 只接受固定 PaymentEscrow 在同次收款交易中发行，不能向销售模块开放免费 mint。
-- `UsageEscrow` 保存 EIP-712 nonce、reservation、locked/reserved/consumed、receipt 去重和 providerDelivered；当前仅支持 provider 交付。每次 reservation 最长 24h，过期未结算可由任何人释放；这是新的链上使用授权流程，尚未接入前端。会话授权、批量 settlement 暂未实现。
+- `UsageEscrow` 保存 EIP-712 nonce、reservation、locked/reserved/consumed、receipt 去重和 providerDelivered；当前仅支持 provider 交付。每次 reservation 最长 24h，过期未结算可由任何人释放；这是新的链上使用授权流程，已接入新账本前端。会话授权、批量 settlement 暂未实现。
 - `StakeVault` 固定读取 UsageEscrow，支持同比例解锁和本人部分提款；无全额管理员 release。
 - `PaymentEscrow` 按项目隔离 reserve/earned/claimed，无 admin sweep；本人销毁钱包 credits 不解锁 PRL、不获得 ETH 退款，可能留下不能领取的 reserve，UI 必须明确此结果。
 - `SaleRouter` / `SettlementModule` 可治理替换。`GovernedAccess` 封存管理员地址，防止 Timelock 延迟授予 EOA 默认管理员后绕过后续延迟；`LaunchpadTimelock` 的延迟固定为 48h，不允许降为 0。

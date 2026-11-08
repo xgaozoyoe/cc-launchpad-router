@@ -1,6 +1,6 @@
 //! Staged contract-group validation. Never replaces legacy configuration or moves funds.
 use crate::{credits, stake, App};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha3::{Digest, Keccak256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,7 +16,7 @@ const COMPONENTS: [&str; 9] = [
     "sale_router",
     "settlement_module",
 ];
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Group {
     pub id: String,
@@ -26,6 +26,12 @@ pub struct Group {
     pub contracts: BTreeMap<String, String>,
     pub runtime_hashes: BTreeMap<String, String>,
     pub prl_token: String,
+    #[serde(default = "default_monitor")]
+    pub monitor_enabled: bool,
+    #[serde(default)]
+    pub migration_gate: Option<String>,
+    #[serde(default)]
+    pub migration_runtime_hash: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +43,9 @@ fn hash(value: &str) -> bool {
     value.len() == 66
         && value.starts_with("0x")
         && value[2..].bytes().all(|v| v.is_ascii_hexdigit())
+}
+fn default_monitor() -> bool {
+    true
 }
 impl Group {
     fn validate(mut self, chain: u64) -> Result<Self, String> {
@@ -53,6 +62,15 @@ impl Group {
             return Err("Unsupported candidate version, chain or identity".into());
         }
         self.prl_token = stake::address(&self.prl_token)?;
+        match (&self.migration_gate, &self.migration_runtime_hash) {
+            (Some(g), Some(h)) if hash(h) => {
+                self.migration_gate = Some(stake::address(g)?);
+                self.migration_runtime_hash = Some(h.to_lowercase());
+            }
+            (None, None) => {}
+            _ => return Err("Migration gate and reviewed hash must be configured together".into()),
+        }
+
         if self.contracts.len() != COMPONENTS.len() || self.runtime_hashes.len() != COMPONENTS.len()
         {
             return Err("Every protocol component and reviewed runtime hash is required".into());
@@ -98,7 +116,7 @@ fn parse(bytes: &[u8], chain: u64) -> Result<Vec<Group>, String> {
         })
         .collect()
 }
-fn load(chain: u64) -> Result<Vec<Group>, String> {
+pub(crate) fn load(chain: u64) -> Result<Vec<Group>, String> {
     match std::env::var("PROTOCOL_GROUPS_FILE") {
         Err(std::env::VarError::NotPresent) => Ok(vec![]),
         Err(_) => Err("Protocol manifest unavailable".into()),
@@ -107,6 +125,25 @@ fn load(chain: u64) -> Result<Vec<Group>, String> {
             chain,
         ),
     }
+}
+impl Group {
+    pub(crate) fn digest(&self) -> String {
+        hex::encode(Keccak256::digest(
+            serde_json::to_vec(self).expect("serializable group"),
+        ))
+    }
+}
+pub(crate) fn select(app: &App, id: &str) -> Result<Group, String> {
+    let chain = app
+        .stake
+        .as_ref()
+        .ok_or("Chain unavailable")?
+        .config
+        .chain_id;
+    load(chain)?
+        .into_iter()
+        .find(|g| g.id == id)
+        .ok_or_else(|| "Contract group is not configured".into())
 }
 fn field<'a>(value: &'a Value, name: &str) -> Result<&'a str, String> {
     value[name]
@@ -119,7 +156,7 @@ fn expected_address(raw: &str) -> Result<String, String> {
     }
     stake::address(&format!("0x{}", &raw[26..]))
 }
-async fn audit(app: &App, g: &Group) -> Result<Value, String> {
+pub(crate) async fn audit(app: &App, g: &Group) -> Result<Value, String> {
     let rpc = app.stake.as_ref().ok_or("Chain unavailable")?;
     if g.prl_token != rpc.config.token_address {
         return Err("Candidate uses a different PRL token".into());
@@ -228,9 +265,44 @@ async fn audit(app: &App, g: &Group) -> Result<Value, String> {
             return Err(format!("Active module role mismatch: {component}"));
         }
     }
+    let signer = credits::config(app)?.settler;
+    let operator = hex::encode(Keccak256::digest(b"OPERATOR_ROLE"));
+    let allowed=rpc.rpc("eth_call",json!([{"to":g.contracts["settlement_module"],"data":credits::data("hasRole(bytes32,address)",&[operator,credits::addr(&signer)])},number])).await?;
+    if credits::uint(allowed.as_str().ok_or("Invalid operator role")?)? != 1 {
+        return Err("Configured settler is not a modular operator".into());
+    }
     let delay=rpc.rpc("eth_call",json!([{"to":g.contracts["governance"],"data":credits::data("getMinDelay()",&[])},number])).await?;
     if credits::uint(delay.as_str().ok_or("Invalid governance delay")?)? != 172800 {
         return Err("Expected fixed 48-hour governance delay".into());
+    }
+    if let (Some(gate), Some(expected_hash)) = (&g.migration_gate, &g.migration_runtime_hash) {
+        let raw = rpc.rpc("eth_getCode", json!([gate, number])).await?;
+        let bytes = hex::decode(
+            raw.as_str()
+                .and_then(|s| s.strip_prefix("0x"))
+                .ok_or("Invalid gate code")?,
+        )
+        .map_err(|_| "Invalid gate code")?;
+        if bytes.is_empty()
+            || format!("0x{}", hex::encode(Keccak256::digest(bytes))) != *expected_hash
+        {
+            return Err("Migration gate code hash mismatch".into());
+        }
+        for (target, signature, want) in [
+            (&g.contracts["factory"], "migrationGate()", gate),
+            (gate, "protocol()", &g.contracts["factory"]),
+            (gate, "legacyStake()", &rpc.config.staking_contract),
+        ] {
+            let raw = rpc
+                .rpc(
+                    "eth_call",
+                    json!([{"to":target,"data":credits::data(signature,&[])},number]),
+                )
+                .await?;
+            if expected_address(raw.as_str().ok_or("Invalid migration binding")?)? != *want {
+                return Err("Migration peer mismatch".into());
+            }
+        }
     }
     let canonical = rpc
         .rpc("eth_getBlockByNumber", json!([number, false]))
@@ -267,10 +339,25 @@ pub async fn report(app: &App) -> Value {
                 json!({"code_and_bindings":"failed","error":"Candidate audit timed out; no activation occurred"})
             }
         };
-        rows.push(json!({"id":g.id,"version":g.version,"chain_id":g.chain_id,"contracts":g.contracts,"validation":validation}));
+        let monitor = app
+            .db
+            .collection::<mongodb::bson::Document>("protocol_group_state")
+            .find_one(mongodb::bson::doc! {"_id":&g.id})
+            .projection(mongodb::bson::doc! {"block":1,"halted":1,"error":1})
+            .await
+            .ok()
+            .flatten();
+        let monitor_error = app
+            .db
+            .collection::<mongodb::bson::Document>("protocol_group_errors")
+            .find_one(mongodb::bson::doc! {"_id":&g.id})
+            .await
+            .ok()
+            .flatten();
+        rows.push(json!({"monitor_error":monitor_error,"monitor":monitor,"monitor_enabled":g.monitor_enabled,"id":g.id,"version":g.version,"chain_id":g.chain_id,"contracts":g.contracts,"validation":validation}));
     }
     json!({"phase":if rows.is_empty(){"preparing"}else{"staged"},"can_activate":false,"legacy_staking_contract":s.config.staking_contract,"candidates":rows,
-      "blockers":["Migration importer and atomic handover are not implemented in this contract version","Modular Rust/UI purchase, reservation and settlement integration is incomplete","Per-project contract-group monitors and migration reconciliation are required","Holder consent, fresh frozen snapshot and fork/Sepolia rehearsal are required"],
+      "blockers":["Install and finalize the reviewed migration gate through 48-hour governance","Freeze the source project and obtain every holder consent for a fresh checkpoint","Fund the exact replacement reserve and provider PRL allowance before atomic commit","Activate only after canonical commit finality and per-group monitor reconciliation"],
       "note":"Legacy contracts remain active. A successful bytecode/binding audit does not authorize activation or move funds."})
 }
 #[cfg(test)]

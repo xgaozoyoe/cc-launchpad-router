@@ -69,6 +69,9 @@ pub struct Offer {
     pub active: bool,
 }
 pub async fn offer(app: &App, p: &Document, tag: &str) -> Result<Offer, String> {
+    if p.get_str("contract_group").is_ok() {
+        return crate::modular::offer(app, p, tag).await;
+    }
     let c = config(app)?;
     let key = stake::project_key(p.get_str("_id").map_err(|_| "Missing project")?);
     let raw = call(
@@ -148,6 +151,17 @@ pub async fn project(app: &App, id: &str) -> Result<Document, (StatusCode, Json<
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Launch not found"))
 }
 pub async fn ready(app: &App, p: &Document) -> Result<(), (StatusCode, Json<Value>)> {
+    if p.get_str("migration_phase").ok() == Some("frozen") {
+        return Err(error(
+            StatusCode::CONFLICT,
+            "Project is frozen for migration",
+        ));
+    }
+    if p.get_str("contract_group").is_ok() {
+        return crate::modular::service(app, p)
+            .await
+            .map_err(|e| error(StatusCode::CONFLICT, &e));
+    }
     if p.get_str("status").ok() != Some("accepted") {
         return Err(error(
             StatusCode::CONFLICT,
@@ -216,6 +230,13 @@ fn as_state(a: &Account) -> Value {
     json!({"locked":a.locked.to_string(),"deposited":a.deposited.to_string(),"burned":a.burned.to_string(),"withdrawn":a.withdrawn.to_string(),"withdrawal":a.withdrawal.to_string(),"withdrawal_nonce":a.nonce.to_string(),"withdrawal_approved":a.approved,"withdrawal_pending":a.pending})
 }
 pub async fn state(app: &App, user: &str, id: &str) -> ApiResult {
+    let selected = project(app, id).await?;
+    if selected.get_str("migration_phase").ok() == Some("frozen") {
+        return Err(error(StatusCode::CONFLICT,"Project is in migration maintenance; legacy balances are not the active destination ledger"));
+    }
+    if selected.get_str("contract_group").is_ok() {
+        return crate::modular::state(app, user, id, &selected).await;
+    }
     let c = config(app).map_err(|e| error(StatusCode::SERVICE_UNAVAILABLE, &e))?;
     let p = project(app, id).await?;
     let o = offer(app, &p, "finalized")
@@ -405,11 +426,42 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
     if method == "GET" && action.is_empty() {
         return state(app, user, id).await;
     }
+    if uuid::Uuid::parse_str(id).is_ok() && method == "POST" {
+        let source = project(app, id).await?;
+        if source.get_str("contract_group").is_ok() {
+            return Err(error(
+                StatusCode::CONFLICT,
+                "Project migrated; refresh and use its modular endpoint",
+            ));
+        }
+    }
     if action == "transactions" && method == "POST" {
         return crate::credit_transactions::submit(app, user, id, body).await;
     }
     let wal = wallet(app, user).await?;
     let p = project(app, id).await?;
+    if p.get_str("contract_group").is_ok() {
+        return Err(error(
+            StatusCode::CONFLICT,
+            "Project migrated; refresh and use its modular credit endpoint",
+        ));
+    }
+    if p.get_str("migration_phase").ok() == Some("frozen")
+        && [
+            "purchase",
+            "infer",
+            "withdraw",
+            "deposit",
+            "complete-withdrawal",
+            "cancel-withdrawal",
+        ]
+        .contains(&action)
+    {
+        return Err(error(
+            StatusCode::CONFLICT,
+            "Project is frozen for migration",
+        ));
+    }
     let key = stake::project_key(id);
     if method == "GET" && action.starts_with("request/") {
         let rid = &action[8..];
@@ -550,6 +602,23 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
         if let Err(e) = crate::trial::take_lease(app, &leases[1], &rid).await {
             crate::trial::release(app, &leases, &rid).await;
             return Err(e);
+        }
+        if let Some(current) = app
+            .db
+            .collection::<Document>("projects")
+            .find_one(doc! {"_id":id})
+            .await
+            .map_err(unavailable)?
+        {
+            if current.get_str("migration_phase").ok() == Some("frozen")
+                || current.get_str("contract_group").is_ok()
+            {
+                crate::trial::release(app, &leases, &rid).await;
+                return Err(error(
+                    StatusCode::CONFLICT,
+                    "Project changed during request preparation",
+                ));
+            }
         }
         let attempt = tokio::time::timeout(std::time::Duration::from_secs(80), async {
             let a = account(app, &c, id, &wal, "finalized").await.map_err(|e| error(StatusCode::SERVICE_UNAVAILABLE, &e))?;

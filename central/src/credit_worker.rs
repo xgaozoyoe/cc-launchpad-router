@@ -12,7 +12,7 @@ type R<T> = Result<T, String>;
 fn fail(_: impl std::fmt::Display) -> String {
     "Credit settlement service unavailable".into()
 }
-async fn command(args: Vec<String>) -> R<String> {
+pub(crate) async fn command(args: Vec<String>) -> R<String> {
     let cast = std::env::var("STAKE_CAST").map_err(fail)?;
     let output = tokio::time::timeout(
         Duration::from_secs(30),
@@ -305,6 +305,16 @@ async fn tick(app: &App, c: &Config) -> R<()> {
         .map_err(fail)?;
     for pos in positions {
         let pid = pos.get_str("project_id").map_err(fail)?;
+        if app
+            .db
+            .collection::<Document>("projects")
+            .find_one(doc! {"_id":pid,"contract_group":{"$exists":true}})
+            .await
+            .map_err(fail)?
+            .is_some()
+        {
+            continue;
+        }
         let wal = pos.get_str("wallet").map_err(fail)?;
         let lease = format!("paid:{wal}:{pid}");
         let run = uuid::Uuid::new_v4().to_string();
@@ -354,7 +364,7 @@ pub async fn run(app: Arc<App>) {
     let owner = uuid::Uuid::new_v4().to_string();
     loop {
         if let Ok(c) = credits::config(&app) {
-            let id = format!("credits:{}:{}", c.chain_id, c.contract);
+            let id = format!("settler:{}:{}", c.chain_id, c.settler);
             let lease = app
                 .db
                 .collection::<Document>("service_leases")
@@ -365,7 +375,15 @@ pub async fn run(app: Arc<App>) {
                 .upsert(true)
                 .await;
             if lease.is_ok() {
-                let result = tokio::time::timeout(Duration::from_secs(90), tick(&app, &c))
+                let result = tokio::time::timeout(Duration::from_secs(90), async {
+                    let busy=match crate::modular_worker::tick(&app,&c).await {
+                        Ok(v)=>v,Err(e)=>{
+                            let _=app.db.collection::<Document>("protocol_group_errors").update_one(doc!{"_id":"worker"},doc!{"$set":{"error":e,"at":now()}}).upsert(true).await;
+                            app.db.collection::<Document>("modular_actions").find_one(doc!{"signer":&c.settler,"status":{"$in":["preparing","prepared"]}}).await.map_err(fail)?.is_some()
+                        }
+                    };
+                    if busy {Ok(())}else{tick(&app,&c).await}
+                })
                     .await
                     .unwrap_or_else(|_| {
                         Err("Settlement cycle timed out; durable actions will resume".into())

@@ -2,11 +2,11 @@
 
 Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/test manifests and the native Ubuntu deployment layout. This is a capability inventory, not a promise of continuously healthy services. Test reports record past results; project status and deadlines can change.
 
-## Planned contract architecture (not deployed)
+## Modular migration implementation
 
-The next architecture separates stable PRL custody, payment reserves, credit ownership and usage accounting from replaceable sale/settlement modules. Its isolated modular contract core now has local Foundry tests and an Anvil + authenticated HTTP-fixture transaction test; it is not connected to the Rust API or production UI. See [architecture decision](CONTRACT-ARCHITECTURE.zh-CN.md). The progressive V2 prototype is a reference only, not the migration deployment target. Existing production contracts and funds remain unchanged; migration requires the new implementation, tests and a revised execution plan.
+Stable PRL custody, ETH reserves, credit ownership and usage accounting are separated from replaceable sale/settlement modules. The atomic V1 importer, per-project Rust ledger epochs, finalized monitor, durable settlement worker, buyer reservation/usage UI and holder-consent/admin migration UI are implemented and tested together. See [migration runbook](CONTRACT-CUTOVER.md). The earlier combined V2 prototype is reference code only.
 
-A wallet-authenticated, read-only [cutover readiness check](CONTRACT-CUTOVER.md) is implemented for staged manifests. It verifies finalized runtime hashes and peer bindings but has no activation endpoint; it does not enable modular purchases or perform migration.
+These capabilities do not migrate existing assets merely by deployment. V1 remains active until the specific project's atomic migration is finalized and its new ledger epoch is activated. Sepolia governance uses the explicitly approved test-only single wallet `0x22b47B6689b34d88b9d259029561692cfD589442`, with a fixed 48-hour Timelock. Production multisig governance remains unconfigured.
 
 ## Active application
 
@@ -30,7 +30,7 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Real buyer purchasing and usage | New test credit escrow, wallet proof, finalized balances, actual API inference and automatic batch burns; existing PRL stays locked |
 | Buyer offers, credits, PRL wallet, inference and pool in `/#demo` | Explicit concept simulations/browser-local data, not production token balances or measured GPU capacity |
 
-Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. A separate test-only `ComputeCredits` contract adds fixed offers, Sepolia ETH purchase/escrow, wallet-bound buyer balances, paid inference reservations, batch burns and earned provider revenue. Offers require separate creation and provider paid-inference consent. Slashing, proportional PRL release and public-pool failover remain unimplemented. See [credit spending](CREDIT-SPENDING.md).
+Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. A separate test-only `ComputeCredits` contract adds fixed offers, Sepolia ETH purchase/escrow, wallet-bound buyer balances, paid inference reservations, batch burns and earned provider revenue. Offers require separate creation and provider paid-inference consent. V1 cannot release PRL proportionally. Modular migration enables proportional release for the migrated project; slashing and public-pool failover remain unimplemented. See [credit spending](CREDIT-SPENDING.md).
 
 ## Contracts and recorded evidence
 
@@ -49,11 +49,11 @@ A stake is collateral and an eligibility requirement; possession of tPRL alone d
 
 The owner can run [Test RPC](RPC-CHECKS.md) through the assigned tunnel using a one-time inference key. Health/authentication, advertised model ID, generation, usage arithmetic and SSE are checked, and sanitized results are saved. Passing does not verify underlying weights/capacity, call the contract verifier or enable sales.
 
-## Agreed product rule, not implemented
+## Collateral release: V1 versus modular projects
 
 Initially lock all deposited collateral. Cumulatively unlock in proportion to credits successfully delivered **by that provider** and settled, divided by a fixed issuance commitment. Failed/unsettled requests and public-pool replacement do not count. Free is unlocked but unwithdrawn; returned is already transferred. See [lifecycle accounting](PROJECT-LIFECYCLE.md#collateral-after-delivery).
 
-The existing contract transfers the whole deposit on release/refund; it cannot implement proportional unlocking or separate withdrawal. A future contract and trusted settlement/metering path must add immutable committed supply, cumulative settled delivery, idempotency and token accounting. Do not calculate withdrawable funds from the demo reducer or announce that gradual release is live.
+The existing contract transfers the whole deposit on release/refund; it cannot implement proportional unlocking or separate withdrawal. The modular contracts implement immutable committed supply, cumulative provider settlement and separate withdrawal; the Rust/API/UI path is tested locally. Existing V1 projects require the consent-based migration first. Do not calculate withdrawable funds from the demo reducer or announce that gradual release is live.
 
 ## Separate reference stack
 
@@ -75,4 +75,4 @@ When adding a feature, update its implementation, tests and this inventory toget
 
 The default UI now uses the authenticated [real launch directory](REAL-LAUNCHPAD.md), with public metadata from finalized-stake projects and actual verification status. Private drafts and account/configuration fields are excluded. The old seeded offers, credit balances and public-pool UI are isolated under `/#demo`. My credits now reads per-launch chain escrow balances and backend reservations. Buy & use supports test ETH purchases, bounded real inference, burn history and reconciled unused-token withdrawals.
 
-The implemented test paid-credit flow and its transaction/state boundaries are specified in [Spending credits on launched models](CREDIT-SPENDING.md). Existing PRL stays locked; proportional collateral unlocking remains future work.
+The implemented test paid-credit flow and its transaction/state boundaries are specified in [Spending credits on launched models](CREDIT-SPENDING.md). Existing V1 PRL stays locked until a separately authorized migration. The modular path supports proportional unlocking and provider withdrawal after finalized delivery.

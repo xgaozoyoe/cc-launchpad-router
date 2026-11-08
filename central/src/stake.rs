@@ -487,7 +487,7 @@ impl Stake {
         let Some(p) = app
             .db
             .collection::<Document>("projects")
-            .find_one(doc! {"onchain_key":&key,"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract})
+            .find_one(doc! {"onchain_key":&key,"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"contract_group":{"$exists":false}})
             .await
             .map_err(fail)?
         else {
@@ -639,12 +639,12 @@ impl Stake {
                     )
                     .await
                     .map_err(fail)?;
-                app.db.collection::<Document>("projects").update_many(doc!{"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"status":{"$in":["awaiting-rpc","verification-pending","accepted"]}},doc!{"$set":{"status":"chain-halted"}}).await.map_err(fail)?;
+                app.db.collection::<Document>("projects").update_many(doc!{"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"contract_group":{"$exists":false},"status":{"$in":["awaiting-rpc","verification-pending","accepted"]}},doc!{"$set":{"status":"chain-halted"}}).await.map_err(fail)?;
                 return Err("Finalized checkpoint changed".into());
             }
         }
         self.renew_lease(app, &id, owner).await?;
-        if let Some(p)=app.db.collection::<Document>("projects").find_one(doc!{"status":"awaiting-registration","stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"$or":[{"registration_retry_at":{"$exists":false}},{"registration_retry_at":{"$lte":now()}}]}).await.map_err(fail)?{
+        if let Some(p)=app.db.collection::<Document>("projects").find_one(doc!{"status":"awaiting-registration","stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"contract_group":{"$exists":false},"$or":[{"registration_retry_at":{"$exists":false}},{"registration_retry_at":{"$lte":now()}}]}).await.map_err(fail)?{
    if let Err(e)=self.register(app,&p).await{app.db.collection::<Document>("projects").update_one(doc!{"_id":text(&p,"_id")?},doc!{"$set":{"registration_error":e,"registration_retry_at":now()+60}}).await.map_err(fail)?;}
   }
         self.renew_lease(app, &id, owner).await?;
@@ -685,7 +685,7 @@ impl Stake {
         let submitted = app
             .db
             .collection::<Document>("projects")
-            .find(doc! {"status":"stake-submitted","stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract})
+            .find(doc! {"status":"stake-submitted","stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"contract_group":{"$exists":false}})
             .limit(100)
             .await
             .map_err(fail)?
@@ -704,7 +704,7 @@ impl Stake {
         let projects = app
             .db
             .collection::<Document>("projects")
-            .find(doc! {"status":{"$in":["awaiting-rpc","expired","verification-pending","accepted"]},"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"onchain_key":{"$exists":true}})
+            .find(doc! {"status":{"$in":["awaiting-rpc","expired","verification-pending","accepted"]},"stake_chain_id":self.config.chain_id as i64,"staking_contract":&self.config.staking_contract,"contract_group":{"$exists":false},"onchain_key":{"$exists":true}})
             .await
             .map_err(fail)?
             .try_collect::<Vec<_>>()
@@ -723,7 +723,7 @@ impl Stake {
                     app.db
                         .collection::<Document>("projects")
                         .update_one(
-                            doc! {"_id":text(&p,"_id")?},
+                            doc! {"_id":text(&p,"_id")?,"contract_group":{"$exists":false}},
                             doc! {"$set":{"status":if expired {"expired"} else {"awaiting-rpc"}}},
                         )
                         .await
@@ -732,13 +732,13 @@ impl Stake {
             }
             if s.0 == 3 {
                 let final_state = self.state(text(&p, "onchain_key")?, "finalized").await?;
-                app.db.collection::<Document>("projects").update_one(doc!{"_id":text(&p,"_id")?},doc!{"$set":{"status":if final_state.0 == 3 {"accepted"} else {"verification-pending"}}}).await.map_err(fail)?;
+                app.db.collection::<Document>("projects").update_one(doc!{"_id":text(&p,"_id")?,"contract_group":{"$exists":false}},doc!{"$set":{"status":if final_state.0 == 3 {"accepted"} else {"verification-pending"}}}).await.map_err(fail)?;
             }
             if matches!(s.0, 4 | 5) {
                 app.db
                     .collection::<Document>("projects")
                     .update_one(
-                        doc! {"_id":text(&p,"_id")?},
+                        doc! {"_id":text(&p,"_id")?,"contract_group":{"$exists":false}},
                         doc! {"$set":{"status":if s.0==4{"refunded"}else{"released"}}},
                     )
                     .await

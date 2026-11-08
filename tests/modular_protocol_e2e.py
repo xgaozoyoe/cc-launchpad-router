@@ -112,7 +112,8 @@ def run():
 
                 prl, _ = deploy('TestPRL', ['address', 'uint256'], [operator, 10_000*10**18])
                 governance, _ = deploy('LaunchpadTimelock', ['address[]', 'address[]'], [[operator], [operator]])
-                factory, deployment_gas = deploy('TestnetProtocolFactory', ['address']*6, [prl, governance, operator, operator, operator, operator])
+                modules, _ = deploy('ModuleDeployer')
+                factory, deployment_gas = deploy('TestnetProtocolFactory', ['address']*7, [prl, governance, operator, operator, operator, operator, modules])
                 registry, token, usage, payment, stake, sale, settlement = [call(factory, f'{name}()', returns=['address'])[0] for name in
                     ['registry', 'creditToken', 'usageEscrow', 'paymentEscrow', 'stakeVault', 'saleRouter', 'settlementModule']]
                 action(operator, registry, 'register(bytes32,address,uint256,uint256,uint256,bytes32)', ['bytes32','address','uint256','uint256','uint256','bytes32'], [PROJECT, provider, 2000*10**18, 1_000_000, 10**9, MODEL])

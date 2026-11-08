@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-08",
+  "scope": "local Rust + MongoDB + Anvil + authenticated HTTP inference fixture; not a GPU benchmark",
+  "contracts": {
+    "passed": 58
+  },
+  "rust_unit": {
+    "passed": 19,
+    "ignored": 1,
+    "note": "MongoDB exercised in full integration"
+  },
+  "gateway_frontend": {
+    "passed": 54
+  },
+  "integration": "passed",
+  "covered": [
+    "48h governance schedule, early execution rejection and execute",
+    "legacy freeze and all-holder consent recovery",
+    "atomic simulated and committed migration; historical counters preserved",
+    "finalized per-project contract-group activation",
+    "new purchase and chain reservation",
+    "real HTTP generation and private cached retry",
+    "durable operator settlement and burn",
+    "proportional PRL provider withdrawal",
+    "legacy isolation and finality/reorg regressions"
+  ],
+  "live_asset_migration": false
+}

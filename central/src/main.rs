@@ -6,6 +6,9 @@ mod credit_transactions;
 mod credit_worker;
 mod credits;
 mod deployment;
+mod migration;
+mod modular;
+mod modular_worker;
 mod protocol_groups;
 mod rpc_check;
 mod rpc_credentials;
@@ -196,6 +199,9 @@ async fn dispatch(
     let owners = account_ids(&app, &identity.user)
         .await
         .map_err(unavailable)?;
+    if let Some(rest) = path.strip_prefix("/api/v1/modular/") {
+        return modular::handle(&app, &identity.user, rest, method.as_str(), &body).await;
+    }
     if let Some(rest) = path.strip_prefix("/api/v1/credits/") {
         return credits::handle(&app, &identity.user, rest, method.as_str(), &body).await;
     }

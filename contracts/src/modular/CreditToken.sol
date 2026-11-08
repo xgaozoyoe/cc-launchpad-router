@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {MigrationBound} from "./MigrationBound.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {ProjectRegistry} from "./ProjectRegistry.sol";
 
 /// @notice Stable token. The fixed payment escrow is the only issuer.
-contract CreditToken is ERC1155 {
+contract CreditToken is MigrationBound, ERC1155 {
     ProjectRegistry public immutable registry;
     address private immutable bootstrap;
     address public paymentEscrow;
     address public usageEscrow;
     mapping(bytes32 => uint256) public issued;
+    mapping(bytes32 => bool) public issuanceImported;
+    mapping(bytes32 => uint256) public migrationMintRemaining;
 
     constructor(ProjectRegistry r) ERC1155("") {
         registry = r;
@@ -30,6 +33,23 @@ contract CreditToken is ERC1155 {
         ProjectRegistry.Project memory p = registry.project(id);
         require(issued[id] + amount <= p.committedCredits, "Supply exceeded");
         issued[id] += amount;
+        _mint(usageEscrow, uint256(id), amount, abi.encode(buyer));
+    }
+
+    function importIssuance(bytes32 id, uint256 historicalIssued, uint256 historicalBurned) external onlyMigrationGate {
+        require(
+            !issuanceImported[id] && issued[id] == 0 && historicalBurned <= historicalIssued
+                && historicalIssued <= registry.project(id).committedCredits,
+            "Invalid issued baseline"
+        );
+        issuanceImported[id] = true;
+        issued[id] = historicalIssued;
+        migrationMintRemaining[id] = historicalIssued - historicalBurned;
+    }
+
+    function mintMigrated(bytes32 id, address buyer, uint256 amount) external onlyMigrationGate {
+        require(issuanceImported[id] && amount > 0 && amount <= migrationMintRemaining[id], "Invalid migrated mint");
+        migrationMintRemaining[id] -= amount;
         _mint(usageEscrow, uint256(id), amount, abi.encode(buyer));
     }
 

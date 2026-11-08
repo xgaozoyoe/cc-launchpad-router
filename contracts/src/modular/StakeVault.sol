@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {MigrationBound} from "./MigrationBound.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -8,7 +9,7 @@ import {ProjectRegistry} from "./ProjectRegistry.sol";
 import {UsageEscrow} from "./UsageEscrow.sol";
 
 /// @notice Stable PRL custody. No governance release, ledger replacement or arbitrary transfer.
-contract StakeVault is ReentrancyGuard {
+contract StakeVault is MigrationBound, ReentrancyGuard {
     using SafeERC20 for IERC20;
     ProjectRegistry public immutable registry;
     UsageEscrow public immutable usageEscrow;
@@ -38,6 +39,20 @@ contract StakeVault is ReentrancyGuard {
         require(stakeToken.balanceOf(address(this)) - beforeBalance == p.stakeAmount, "Unsupported token");
         registry.markStaked(project);
         emit Staked(project, msg.sender, p.stakeAmount);
+    }
+
+    function importStake(bytes32 project) external onlyMigrationGate nonReentrant {
+        ProjectRegistry.Project memory p = registry.project(project);
+        require(
+            p.status == ProjectRegistry.Status.Verified && initial[project] == 0 && returned[project] == 0,
+            "Invalid stake import"
+        );
+        require(stakeToken.allowance(p.provider, address(this)) == p.stakeAmount, "Exact migration allowance required");
+        uint256 beforeBalance = stakeToken.balanceOf(address(this));
+        initial[project] = p.stakeAmount;
+        stakeToken.safeTransferFrom(p.provider, address(this), p.stakeAmount);
+        require(stakeToken.balanceOf(address(this)) - beforeBalance == p.stakeAmount, "Unsupported token");
+        emit Staked(project, p.provider, p.stakeAmount);
     }
 
     function collateralState(bytes32 project)

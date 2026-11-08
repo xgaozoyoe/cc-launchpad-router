@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
+import {MigrationBound} from "./MigrationBound.sol";
 import {GovernedAccess} from "./GovernedAccess.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ProjectRegistry} from "./ProjectRegistry.sol";
 import {CreditToken} from "./CreditToken.sol";
 
 /// @notice Stable ETH custody and project liabilities; no admin sweep or arbitrary payout.
-contract PaymentEscrow is GovernedAccess, ReentrancyGuard {
+contract PaymentEscrow is MigrationBound, GovernedAccess, ReentrancyGuard {
     bytes32 public constant SALE_ROLE = keccak256("SALE_ROLE");
 
     struct Funds {
@@ -16,6 +17,7 @@ contract PaymentEscrow is GovernedAccess, ReentrancyGuard {
         uint256 claimed;
     }
     mapping(bytes32 => Funds) public funds;
+    mapping(bytes32 => bool) public reserveImported;
     ProjectRegistry public immutable registry;
     CreditToken public immutable token;
     address public immutable usageEscrow;
@@ -27,6 +29,19 @@ contract PaymentEscrow is GovernedAccess, ReentrancyGuard {
         registry = r;
         token = t;
         usageEscrow = usage;
+    }
+
+    /// @notice Only new backing is credited. Previously earned legacy ETH is never earned twice.
+    function importReserve(bytes32 id, uint256 remainingCredits) external payable onlyMigrationGate {
+        Funds storage f = funds[id];
+        require(
+            !reserveImported[id] && f.paid == 0 && f.reserve == 0 && f.earned == 0 && f.claimed == 0
+                && msg.value == remainingCredits * registry.project(id).weiPerCredit,
+            "Invalid reserve import"
+        );
+        reserveImported[id] = true;
+        f.paid = msg.value;
+        f.reserve = msg.value;
     }
 
     function purchase(bytes32 id, address buyer, uint256 amount) external payable onlyRole(SALE_ROLE) nonReentrant {

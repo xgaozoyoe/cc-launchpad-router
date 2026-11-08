@@ -128,3 +128,15 @@ test('protocol readiness is session-protected same-origin POST with no activatio
  assert.equal(calls,1);
  assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/admin/activate',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,transport,session)).status,404);
 });
+
+test('modular ledger and migration consent routes enforce authentication and exact methods',async()=>{
+ const id='11111111-1111-4111-8111-111111111111';const make=(action:string,method='POST',origin=env.APP_ORIGIN)=>new Request(env.APP_ORIGIN+'/api/central/modular/'+id+(action?'/'+action:''),{method,headers:{origin},...(method==='POST'?{body:'{}'}:{})});let calls=0;const transport:typeof fetch=async()=>{calls++;return Response.json({ok:true});};
+ for(const action of ['transactions','purchase','reserve','infer','withdraw','deposit','claim-revenue','release','consent']){
+  assert.equal((await centralProxy(make(action),env,transport,session)).status,200);
+  assert.equal((await centralProxy(make(action,'GET'),env,transport,session)).status,405);
+  assert.equal((await centralProxy(make(action,'POST','https://attacker.example'),env,transport,session)).status,403);
+ }
+ for(const action of ['','info','consent-plan']){assert.equal((await centralProxy(make(action,'GET'),env,transport,session)).status,200);assert.equal((await centralProxy(make(action),env,transport,session)).status,405);}
+ assert.equal((await centralProxy(make('reserve'),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(make('execute'),env,transport,session)).status,404);assert.equal(calls,12);
+});
