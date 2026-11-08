@@ -19,7 +19,8 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Collateral display | Locked/free/returned derived from recorded project state; not a wallet balance or a partial unlock ledger |
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
-| Buyer offers, credits, PRL wallet, resources, inference and pool UI | Concept simulations/browser-local data, not production token balances or measured GPU capacity |
+| Default project directory and provider setup | Real backend records and model registry; no seeded offers or simulated balances |
+| Buyer offers, credits, PRL wallet, inference and pool in `/#demo` | Explicit concept simulations/browser-local data, not production token balances or measured GPU capacity |
 
 Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. `sales_enabled` remains false: real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
 
@@ -61,3 +62,5 @@ Real local FRP transport was tested against mock inference. GPU model loading an
 - [White paper review](WHITEPAPER-STATUS.md)
 
 When adding a feature, update its implementation, tests and this inventory together. Keep private deployment configuration, keys and logs out of public documentation.
+
+The default UI now uses the authenticated [real launch directory](REAL-LAUNCHPAD.md), with public metadata from finalized-stake projects and actual verification status. Private drafts and account/configuration fields are excluded. The old seeded offers, credit balances and public-pool UI are isolated under `/#demo`. Real My credits states the ledger is not connected; purchasing remains disabled.

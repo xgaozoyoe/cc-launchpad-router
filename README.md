@@ -39,7 +39,7 @@ The production workspace runs at https://riddle.xyz. Google login, account-owned
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; purchases and balances remain simulations. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). Functional RPC checks and [wallet-authorized admin review](docs/ADMIN-REVIEW.md) are integrated. Manual demo capacity approval and finalized `verifyProject` acceptance do not enable sales.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; simulated purchases and balances are isolated in the Demo workspace. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). Functional RPC checks and [wallet-authorized admin review](docs/ADMIN-REVIEW.md) are integrated. Manual demo capacity approval and finalized `verifyProject` acceptance do not enable sales.
 
 ## Stake-gated publishing
 
@@ -107,7 +107,7 @@ These are private central-host registration lists, not public buyer endpoints or
 
 This is a transport/provisioning starter. The router’s operator test mode forwards the supplier Bearer key. Production must authenticate buyers, validate credits for the launch ID, reserve credits, inject the supplier key from a server-side vault, meter accepted usage and burn the correct launch’s credits. Buyer authentication, the credit ledger, vault, issuance transaction, PRL settlement and failover are not implemented here. Never give supplier keys to buyers.
 
-The website’s compute setup and buyer inference are simulated; its real server projects and finalized Launch IDs are not automatically synchronized with this separate FRP registry. The platform should register the same launch ID when issuance is approved. Aggregate capacity across multiple launches must be checked before issuing real credits.
+The default website uses real server projects and provider setup. Buyer inference is available only as an explicit Demo simulation; real server projects and finalized Launch IDs are not automatically synchronized with this separate reference FRP registry. The platform should register the same launch ID when issuance is approved. Aggregate capacity across multiple launches must be checked before issuing real credits.
 
 ## Versions and verification
 
@@ -125,7 +125,7 @@ The optional real-tunnel test requires `FRP_BIN_DIR` pointing to verified offici
 
 ## Rust central backend
 
-The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz; they have not replaced the older Python FRP/stake integrations. Finalized stake events now reserve Launch IDs. Wallet-authorized manual demo capacity approval and finalized on-chain acceptance are available. Measured capacity benchmarking and sales integration remain unfinished; sales are disabled.
+The new central service foundation uses **Rust + MongoDB**. See [central/README.md](central/README.md) for startup, signed requests, draft APIs and current integration limits. The Rust API and UI are deployed at https://riddle.xyz, with native FRPS authorization. The older Python FRP/stake stack remains a separate reference implementation. Finalized stake events now reserve Launch IDs. Wallet-authorized manual demo capacity approval and finalized on-chain acceptance are available. Measured capacity benchmarking and sales integration remain unfinished; sales are disabled.
 
 ## Run the integrated workspace
 
@@ -142,3 +142,5 @@ Open http://localhost:4174. The project dialog now saves drafts through the same
 ## Documentation and collateral rules
 
 [Implementation status](docs/IMPLEMENTATION-STATUS.md) distinguishes deployed behavior, separate reference code and agreed but unimplemented product rules. The downloadable PowerPoint is a concept white paper, not a statement of deployed capabilities. In My launches, PRL collateral is split into locked, free/withdrawable and returned balances. The current escrow supports full refunds/releases only; proportional unlocking after provider-delivered, settled credits is agreed but not implemented.
+
+The default website now shows the [real Launchpad directory](docs/REAL-LAUNCHPAD.md), actual project verification and the backend-supported model list. Purchases remain disabled. Seeded offers, simulated balances and public-pool illustrations are available only in the explicitly labelled Demo workspace (`/#demo`); default project creation never falls back to a fake launch.

@@ -1,5 +1,6 @@
 mod admin;
 mod auth;
+mod catalog;
 mod deployment;
 mod rpc_check;
 mod rpc_credentials;
@@ -281,12 +282,11 @@ async fn dispatch(
                 json!({"configured":false})
             };
             Ok(Json(
-                json!({"network":"sepolia","sales_enabled":false,"chain":chain,"wallet_verification":"project-bound EIP-191 signature","rpc_acceptance":"not_integrated"}),
+                json!({"network":"sepolia","sales_enabled":false,"chain":chain,"wallet_verification":"project-bound EIP-191 signature","rpc_acceptance":"functional_checks_and_manual_onchain_verification"}),
             ))
         }
-        ("GET", "/api/v1/models") => Ok(Json(
-            json!({"models":[{"id":"qwen3-8b-awq","model":"Qwen/Qwen3-8B-AWQ","revision":"93eb32ea9ef98cc266b85563ad0dd29e5f2940b9","context":4096}]}),
-        )),
+        ("GET", "/api/v1/launchpad") => catalog::list(&app).await,
+        ("GET", "/api/v1/models") => Ok(Json(json!({"models":catalog::models()}))),
         ("POST", "/api/v1/projects") => {
             let draft: Draft = serde_json::from_slice(&body)
                 .map_err(|_| error(StatusCode::BAD_REQUEST, "Invalid draft"))?;

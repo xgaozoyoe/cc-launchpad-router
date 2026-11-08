@@ -77,3 +77,10 @@ test('admin rechecks and provider credential custody require session and origin'
  assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,async()=>Response.json({}))).status,401);
  assert.equal((await centralProxy(req(env.APP_ORIGIN),env,transport,session)).status,200);assert.equal(called,1);}
 });
+
+test('real launch directory uses the authenticated read-only backend route',async()=>{
+ const transport:typeof fetch=async(url,options)=>{assert.equal(String(url),env.CENTRAL_API_ORIGIN+'/api/v1/launchpad');assert.equal(options?.method,'GET');return Response.json({launches:[],sales_enabled:false});};
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/launchpad'),env,transport,session)).status,200);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/launchpad'),env,transport,async()=>Response.json({}))).status,401);
+ assert.equal((await centralProxy(new Request(env.APP_ORIGIN+'/api/central/launchpad',{method:'POST',headers:{origin:env.APP_ORIGIN},body:'{}'}),env,transport,session)).status,405);
+});

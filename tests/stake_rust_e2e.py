@@ -108,6 +108,7 @@ def run():
    api('GET','/api/v1/projects/'+legacy_project['_id'],user=legacy)
    api('POST','/api/v1/account/link-legacy',{'legacy_account_id':legacy},user='google:another-subject',expected=409)
    project=api('POST','/api/v1/projects',{'name':'Rust stake integration','model_id':'qwen3-8b-awq','request_id':str(uuid.uuid4())})['project'];pid=project['_id'];path=f'/api/v1/projects/{pid}'
+   assert not api('GET','/api/v1/launchpad',user='bob')['launches'] # private drafts never enter directory
    challenge=api('POST',path+'/stake/challenge',{'wallet_address':provider.address,'stake_amount':'2000'})
    wrong=Account.sign_message(encode_defunct(text=challenge['message']),Account.create().key).signature.hex()
    api('POST',path+'/stake/prepare',{'challenge_id':challenge['challenge_id'],'signature':'0x'+wrong.removeprefix('0x')},expected=400)
@@ -130,6 +131,10 @@ def run():
    issued=wait(lambda:get_status('awaiting-rpc'),90)
    stake_block=rpc('eth_getBlockByNumber',[stake_receipt['blockNumber'],False]);at=int(stake_block['timestamp'],16)
    assert issued['provider_id']==tx_hash and issued['staked_at']==at and issued['rpc_deadline']==at+86400 and issued['stake_finalized'] is True
+   directory=api('GET','/api/v1/launchpad',user='bob');public=next(p for p in directory['launches'] if p['_id']==pid)
+   assert public['launch_id']==issued['launch_id'] and directory['sales_enabled'] is False
+   assert set(public)<= {'_id','name','model_id','status','launch_id','provider_id','stake_raw','stake_finalized','capacity_approved','progress','sales_enabled'}
+   assert not public['capacity_approved'] and 'account_id' not in public
    import io,tarfile
    api('POST',path+'/deployment/bundle',{},user='bob',expected=404)
    bundle=api('POST',path+'/deployment/bundle',{})
@@ -197,6 +202,10 @@ def run():
    assert api('GET',path+'/deployment/rpc-credential')['authorized'] is False
    approved,proof=admin_sign('capacity',{'project_id':pid,'reason':'Manual demo approval','manual_demo':True})
    assert approved['benchmarked'] is False and approved['sales_enabled'] is False
+   directory=api('GET','/api/v1/launchpad',user='bob');public=next(p for p in directory['launches'] if p['_id']==pid)
+   assert public['capacity_approved'] is True and 'capacity_approval' not in public
+   assert credential not in json.dumps(directory) and 'Manual demo approval' not in json.dumps(directory)
+
    api('POST','/api/v1/admin/capacity',proof,expected=403)
    c=api('POST','/api/v1/admin/challenge',{'intent':'capacity','payload':{'project_id':pid,'reason':'Bound to original payload','manual_demo':True}})
    signed=Account.sign_message(encode_defunct(text=c['message'].replace('Bound to original payload','Tampered approval')),admin_key).signature.hex()
@@ -207,6 +216,7 @@ def run():
    rpc('evm_increaseTime',[86401]);rpc('anvil_mine',['0x1'])
    send(provider.address,escrow,'0x'+selector('refundExpired(bytes32)')+registered['onchain_key'][2:])
    refunded=wait(lambda:get_status('refunded'),60);assert refunded['launch_id']==saved
+   assert all(p['_id']!=pid for p in api('GET','/api/v1/launchpad',user='bob')['launches'])
    api('POST',path+'/deployment/bundle',{},expected=409);assert hook(login)['reject'] is True
    api('POST',path+'/deployment/rpc-check',{'inference_api_key':'test-inference-secret'},expected=409)
    # A stake refunded before event finality must not poison the global cursor.
@@ -257,7 +267,7 @@ def run():
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False
-   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility; private credential consent/revocation and independent wallet-signed admin RPC retests.')
+   print('PASS: Rust + MongoDB + Anvil: wrong signature/replay/owner isolation, registration, approve/stake, no early ID, finalized issuance, block-time deadline, stable ID, refund, owner-only RPC checks, saved failures/success, key privacy and expiry; admin wallet signatures, tamper/replay rejection, account-bound review, manual capacity approval, verifier role, finalized acceptance and post-deadline tunnel eligibility; private credential consent/revocation and independent wallet-signed admin RPC retests; real launch directory excludes drafts, private approval details, credentials and inactive projects.')
   except Exception:
    log.flush();log.seek(0);print(log.read()[-5000:]);raise
   finally:
