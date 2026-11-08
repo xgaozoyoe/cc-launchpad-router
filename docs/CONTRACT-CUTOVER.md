@@ -2,6 +2,12 @@
 
 Reviewed 2026-11-08. Atomic migration and the Rust/API/React path are implemented and tested. Deployment of an inactive target does not change a project's current custody or ledger. Existing projects remain V1 until finalized migration and explicit activation.
 
+## Recorded inactive Sepolia target
+
+The new target is deployed; [deployment receipts and reviewed runtime hashes](../config/deployments/modular-sepolia.json) are recorded. Group ID: `sepolia-modular-20261108`. Governance: `0x3c82506ee9b4921e93d0fd268fb00882db3dbcbf`; factory: `0xcf8af31eb491fc246db85e66b67680165621312d`; gate: `0xee610081dbc7f590d1a841582b41aab4d42dcd27`. The gate is not installed, the candidate monitor is disabled, no legacy migration permissions have been granted, no source assets moved, and no governance delay has started. Wait for deployment finality before scheduling from Admin review.
+
+The first Timelock deployment reverted because the local Forge gas estimate was below the node requirement. Recovery regenerated fresh nonce/address simulation, used each node estimate with headroom, and persisted every transaction hash before waiting. All four successful deployments were checked against their expected addresses and compiled runtime artifacts. Future deployments must use node estimation for each creation; do not reuse the local script estimate blindly.
+
 ## Architecture and authorization
 
 The stable contracts are ProjectRegistry, CreditToken, UsageEscrow, PaymentEscrow and StakeVault. SaleRouter and SettlementModule hold no user funds. Fixed peer references cannot be rebound; module role changes require the 48-hour LaunchpadTimelock. The factory can install one fixed migration gate once, through that Timelock.

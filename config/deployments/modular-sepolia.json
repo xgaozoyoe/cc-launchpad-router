@@ -1,0 +1,93 @@
+{
+  "chain_id": 11155111,
+  "status": "inactive target deployed; no legacy funds moved; governance delay not scheduled",
+  "governance_proposer": "0x22b47B6689b34d88b9d259029561692cfD589442",
+  "test_only_single_signer_exception": true,
+  "timelock_seconds": 172800,
+  "source_stake": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "source_credits": "0x4c18665f28ac99745edda9b62cf3668ff0f62faf",
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "deployments": [
+    {
+      "name": "LaunchpadTimelock",
+      "address": "0x3c82506ee9b4921e93d0fd268fb00882db3dbcbf",
+      "nonce": "0x10",
+      "estimated_gas": 10978236,
+      "gas_limit": 12624972,
+      "state": "mined",
+      "hash": "0xc1c81030a904e5cbc1c32d5404b51ca5581541d07bfbc2131d0abc13fe43da67",
+      "block": 12089763,
+      "gas_used": 10890635
+    },
+    {
+      "name": "ModuleDeployer",
+      "address": "0x452e67218fe1b76b67983460f8bfaa57cadb0edc",
+      "nonce": "0x11",
+      "estimated_gas": 6299000,
+      "gas_limit": 7243850,
+      "state": "mined",
+      "hash": "0xfa807fc35f630d35935cc652d3fbf706b0cb500ef451418526fa7808b437e500",
+      "block": 12089764,
+      "gas_used": 6248244
+    },
+    {
+      "name": "TestnetProtocolFactory",
+      "address": "0xcf8af31eb491fc246db85e66b67680165621312d",
+      "nonce": "0x12",
+      "estimated_gas": 68606459,
+      "gas_limit": 78897428,
+      "state": "mined",
+      "hash": "0x128245ca0508a1db140607280c3024ce5e13abf86849b72f41487a55638e2c45",
+      "block": 12089765,
+      "gas_used": 68044935
+    },
+    {
+      "name": "LegacyMigrationGate",
+      "address": "0xee610081dbc7f590d1a841582b41aab4d42dcd27",
+      "nonce": "0x13",
+      "estimated_gas": 21827471,
+      "gas_limit": 25101592,
+      "state": "mined",
+      "hash": "0x58ee29c52227fa2f45f72a838a97cefca96a3dc4b82cfbedf7759e679bb66739",
+      "block": 12089766,
+      "gas_used": 21654443
+    }
+  ],
+  "group": {
+    "id": "sepolia-modular-20261108",
+    "version": "modular-v1",
+    "chain_id": 11155111,
+    "deployment_block": 12089763,
+    "prl_token": "0x3347f108f03287bdb39cba95f40f7f39e6dff1f8",
+    "contracts": {
+      "factory": "0xcf8af31eb491fc246db85e66b67680165621312d",
+      "governance": "0x3c82506ee9b4921e93d0fd268fb00882db3dbcbf",
+      "registry": "0xa83fa9245f215ff2db4d04b69ddb830d8c607e45",
+      "credit_token": "0xd9f0740e58c293b06ff847d829ae054ff28c4791",
+      "usage_escrow": "0xcf29b72dae164c9a2abc199d8c4c0e84037b9a62",
+      "payment_escrow": "0xe55c36bce7341a7ce5fa18825965059509fba910",
+      "stake_vault": "0x683f75fd3267db9fb672f40a562da1a2eec92ace",
+      "sale_router": "0x919393d6f7d79e9fdde7ddad93488d7bf4905c40",
+      "settlement_module": "0xf13ef1d7f94eb2d534e9956725b67170896f1a50"
+    },
+    "runtime_hashes": {
+      "factory": "0x507a775b1114033a3fb931dd2c6fa690fb623f32b864c3eead5c185625edc30a",
+      "governance": "0xf35cb481de64791d5ddb0428377bbabe66f7a7afbb96ec6e86156b0cb3175862",
+      "registry": "0x866942052949a2b2068b1bb73dcfeb84e43a5f11cf084225eff1ff4bfa088724",
+      "credit_token": "0x958ec5e0dce061b60b6d4101bba3a0f6766462647c0503b3aef7a524f5751f91",
+      "usage_escrow": "0x63fb9296de8b383701b9e1883c99f8238325ba733bf194de5bcb921d0471f1d5",
+      "payment_escrow": "0x8682fba98bf8bb1941058c906cf7723db7586b538d52f560c331a8c33f331a2d",
+      "stake_vault": "0x5223b432b68443084fa481037fa112872baaed67197896eccc0c531a4601bec7",
+      "sale_router": "0x50d866927378c82689903d625dfbde2860dd315256bcc890f52f1295bdccf62d",
+      "settlement_module": "0x4f7debd4c4563b75a5b0e9b851ccf68d2024d5ed5f20e04cb63f1758bd2a800b"
+    },
+    "monitor_enabled": false,
+    "migration_gate": "0xee610081dbc7f590d1a841582b41aab4d42dcd27",
+    "migration_runtime_hash": "0x5c0165ec2bf8515acfe1ea714d053d886d97eebebf92e3c9d233dffb3726cb86"
+  },
+  "runtime_build_comparison": "all component runtimes match reviewed artifacts with immutable offsets accounted for",
+  "failed_first_attempt": {
+    "tx_hash": "0xce4273931211537e887660ebe43e8551625c9874b826a20a843914f3f423993c",
+    "status": "reverted: gas exhausted; no deployed code; recovery used per-transaction node estimates"
+  }
+}
