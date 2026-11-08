@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-08",
+  "application_revision": "50377d40f987ffd1bb36af8b6ea6fb5f139cf1e7",
+  "frontend_gateway_tests_passed": 64,
+  "production_build": "passed",
+  "isolated_browser_refresh_test": {
+    "personal_sign_before_refresh": 1,
+    "personal_sign_after_refresh": 1,
+    "permission_requests": 0,
+    "network_switch_requests": 0,
+    "visible_result": "Admin session restored. No new signature was requested."
+  },
+  "coverage": [
+    "account-scoped cache",
+    "live address and chain match",
+    "backend session validation",
+    "expired and rejected sessions",
+    "changed source/admin binding",
+    "network failure retains retry cache",
+    "wallet changes clear cached authority"
+  ],
+  "storage": "current-tab sessionStorage",
+  "backend_session_lifetime_seconds_unchanged": 900,
+  "protected_actions_still_require_fresh_signature": true,
+  "live_health": 200,
+  "production_restore_bundle": "verified",
+  "backend_and_configuration_fingerprints": "unchanged",
+  "service_restart": false,
+  "live_wallet_signatures_by_agent": 0
+}
