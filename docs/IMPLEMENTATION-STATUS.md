@@ -4,7 +4,7 @@ Reviewed 2026-11-08 against repository code, the committed Sepolia deployment/te
 
 ## Planned contract architecture (not deployed)
 
-The next architecture separates stable PRL custody, payment reserves, credit ownership and usage accounting from replaceable sale/settlement modules. See [architecture decision](CONTRACT-ARCHITECTURE.zh-CN.md). The progressive V2 prototype is a reference only, not the migration deployment target. Existing production contracts and funds remain unchanged; migration requires the new implementation, tests and a revised execution plan.
+The next architecture separates stable PRL custody, payment reserves, credit ownership and usage accounting from replaceable sale/settlement modules. Its isolated modular contract core now has local Foundry tests and an Anvil + authenticated HTTP-fixture transaction test; it is not connected to the Rust API or production UI. See [architecture decision](CONTRACT-ARCHITECTURE.zh-CN.md). The progressive V2 prototype is a reference only, not the migration deployment target. Existing production contracts and funds remain unchanged; migration requires the new implementation, tests and a revised execution plan.
 
 ## Active application
 

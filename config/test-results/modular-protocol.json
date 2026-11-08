@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-08",
+  "status": "local development only; not deployed; no migration",
+  "modular_tests_passed": 22,
+  "all_contract_tests_passed": 49,
+  "fuzz": "256 configured runs plus cached regression counterexample for modular conservation",
+  "integration": {
+    "environment": "disposable Anvil + authenticated HTTP provider fixture; not Rust/browser/real GPU model",
+    "status": "passed",
+    "factory_deployment_gas": 8159967,
+    "purchased": 1000,
+    "reserved": 100,
+    "provider_delivered_and_burned": 49,
+    "prl_unlocked": "0.098",
+    "prl_withdrawn": "0.04",
+    "prl_free_after_withdrawal": "0.058",
+    "remaining_credits_withdrawn": 951,
+    "provider_earned_claimed_wei": 49000000000
+  },
+  "verified": [
+    "Atomic full-value purchase and issuance rollback",
+    "No free router mint or direct payment release",
+    "EIP-712 maximum/nonce/chain/escrow/expiry binding",
+    "Reservation and receipt replay protection",
+    "Partial and full collateral withdrawal with conservation",
+    "Known failure and expiry release no revenue or collateral",
+    "Wallet transfers and redeposits preserve project liability",
+    "Provider revenue reentrancy rejected with earned balance remaining",
+    "48-hour module rotation preserves assets and ledgers",
+    "Pinned governance prevents an instant-admin delegation bypass",
+    "Timelock delay cannot be lowered"
+  ],
+  "remaining": [
+    "Rust and UI modular-contract integration",
+    "Separate acceptance module and session authorization",
+    "Multi-contract-group monitors",
+    "Migration importer/coordinator and fork rehearsal",
+    "Sepolia rehearsal and multisig governance configuration"
+  ],
+  "production_writes": false
+}

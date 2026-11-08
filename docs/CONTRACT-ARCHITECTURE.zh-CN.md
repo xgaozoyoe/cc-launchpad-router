@@ -1,6 +1,6 @@
 # 合约架构决策：稳定资产与账本，可替换业务模块
 
-状态：2026-11-08 架构设计，尚未部署。此设计取代同仓库 `LaunchStakeV2` / `ComputeCreditsV2` 原型的部署方向；原型只保留为比例计算和测试参考。现有线上 V1 不变。
+状态：2026-11-08，拆分合约核心已有本地实现和测试，尚未部署或接入线上后台。此设计取代同仓库 `LaunchStakeV2` / `ComputeCreditsV2` 原型的部署方向；原型只保留为比例计算和测试参考。现有线上 V1 不变。
 
 ## 1. 目标与边界
 
@@ -134,7 +134,9 @@ MigrationImporter 是单用途、受限项目/计划 hash/数量/期限的导入
 5. 本地完整链路：stake → verify → buy → reserve → real fixture inference → settle/burn → Free → withdraw；覆盖失败和并发。
 6. 实现 MigrationImporter/Coordinator；fork 旧快照，逐余额核对并演练原子失败、旧交易 pending、reorg、旧模块撤权、重复迁移。
 7. Sepolia 小额独立项目演练，再生成现有项目最新冻结快照和具体待签交易供审核。
-8. 最后才执行现有项目迁移。当前没有完成第 2–8 步，不能将此文档当成已部署实现。
+8. 最后才执行现有项目迁移。
+
+当前进度：第 2 步的核心绑定/权限/守恒测试和第 3 步的本地 Timelock 轮换已通过；第 5 步仅完成 Anvil + 带鉴权 HTTP fixture 的合约交易联调，尚未接入真实 Rust API/网页。第 4、6、7、8 步尚未完成。不能将本地测试当成已上线或已具备迁移能力。
 
 ## 8. 必须保留的证据
 
@@ -143,3 +145,17 @@ MigrationImporter 是单用途、受限项目/计划 hash/数量/期限的导入
 - 钱包可见的购买、授权、提款和结算 tx；finalized 区块与已索引区块分别显示。
 - 迁移前后资产守恒、每用户余额、历史履约、ETH reserve/earned/claimed 对账报告。
 - 文档、白皮书和 UI 标记设计/实现/已部署三个状态，避免再次把计划能力当成当前能力。
+
+
+## 9. 本地实现对应关系与待办
+
+代码在 `contracts/src/modular/`，测试在 `contracts/test/ModularProtocol.t.sol` 和 `tests/modular_protocol_e2e.py`。使用说明见 [模块实现说明](MODULAR-CONTRACTS.md)。
+
+- `ProjectRegistry` 固定经济条款并执行 24h deadline；验收暂用可治理轮换的 ACCEPTANCE_ROLE，独立 AcceptanceModule 尚未实现。
+- `CreditToken` 只接受固定 PaymentEscrow 在同次收款交易中发行，不能向销售模块开放免费 mint。
+- `UsageEscrow` 保存 EIP-712 nonce、reservation、locked/reserved/consumed、receipt 去重和 providerDelivered；当前仅支持 provider 交付。每次 reservation 最长 24h，过期未结算可由任何人释放；这是新的链上使用授权流程，尚未接入前端。会话授权、批量 settlement 暂未实现。
+- `StakeVault` 固定读取 UsageEscrow，支持同比例解锁和本人部分提款；无全额管理员 release。
+- `PaymentEscrow` 按项目隔离 reserve/earned/claimed，无 admin sweep；本人销毁钱包 credits 不解锁 PRL、不获得 ETH 退款，可能留下不能领取的 reserve，UI 必须明确此结果。
+- `SaleRouter` / `SettlementModule` 可治理替换。`GovernedAccess` 封存管理员地址，防止 Timelock 延迟授予 EOA 默认管理员后绕过后续延迟；`LaunchpadTimelock` 的延迟固定为 48h，不允许降为 0。
+- `TestnetProtocolFactory` 在一次构造交易中部署并封存固定引用、撤销工厂管理员。仅允许 Sepolia/本地测试链；生产多签尚未配置。部署前仍必须检查 Timelock 字节码与角色，而不只信任地址的 getter 返回值。
+- 导入/迁移、双合约组 monitor、Rust/前端授权协议、真实模型联调与多签演练均未完成；线上保持 V1。
