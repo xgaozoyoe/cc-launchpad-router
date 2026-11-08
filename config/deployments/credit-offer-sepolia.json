@@ -1,0 +1,10 @@
+{
+  "project_id": "076d4cfc-3b2c-4b51-999b-32b88b7a41b5",
+  "project_key": "0x35f8686baa273624e8bdd09f73363ad47fbab9392cde162cc17c34026b26aa2e",
+  "contract": "0x4c18665f28ac99745edda9b62cf3668ff0f62faf",
+  "supply": "1000000",
+  "price_wei_per_credit": "1000000000",
+  "model_id": "qwen3-8b-awq",
+  "transaction_hash": "0xf8f75a65ccac1c52dd99ca043ff117b38a3e8c07475899a90948a9300bbb7d0e",
+  "block": 12088349
+}

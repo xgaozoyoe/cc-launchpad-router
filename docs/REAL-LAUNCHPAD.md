@@ -1,6 +1,6 @@
 # Real Launchpad and isolated Demo workspace
 
-The default authenticated app reads the central backend. It no longer shows seeded providers, illustrative credit prices, simulated balances, fake network activity or public-pool capacity. The signed-out landing page describes the real Sepolia testnet features and explicitly says credit sales are not yet enabled.
+The default authenticated app reads the central backend. It no longer shows seeded providers, illustrative credit prices, simulated balances, fake network activity or public-pool capacity. The signed-out landing page describes the real Sepolia testnet features and identifies Sepolia test credit purchases and real inference.
 
 ## Real directory
 
@@ -10,7 +10,7 @@ The endpoint projects an explicit public field allowlist. It returns project/Lau
 
 The frontend shows real project counts and finalized verification counts from the returned records, not global estimates. API results show the original check time and are not continuous health claims. Errors remain visible; no sample listings replace unavailable backend data. The directory refreshes every 30 seconds while visible.
 
-Credit pricing, issuance supply, payment, a real buyer ledger and redemption remain unfinished. The directory returns `sales_enabled:false`, shows price/supply as unavailable and disables purchasing. My credits says the real ledger is not connected; it does not display a made-up zero or simulated balance. The registered model list comes from the backend's Qwen3 8B AWQ serving profile.
+Credit offers come from the separate finalized `ComputeCredits` contract, tied to the exact project/model. The directory shows price in Sepolia ETH per million output credits, sorted low to high. Purchase is enabled only for an accepted project with a finalized active offering and provider paid-inference consent. A newly submitted offering is shown as awaiting Ethereum finality, with purchase disabled until its finalized state is readable. My credits and `/#credits/<project-uuid>` show real per-launch balances, pending/burned consumption and purchasing/usage/withdrawal actions. See [paid credit flow](CREDIT-SPENDING.md).
 
 ## Provider management
 
@@ -24,7 +24,7 @@ The default app does not initialize or display the simulation reducer. Demo stat
 
 ## Verification
 
-The Rust/MongoDB/Anvil integration test checks that another signed-in user can read listed launch metadata but not owner project details, that drafts and inactive projects are excluded, and that approvals and credentials do not leak into directory output. Gateway tests cover authenticated GET and rejection of writes. Browser verification checks the actual deployed project, disabled purchase state, real supported model list and the separate Demo navigation.
+The Rust/MongoDB/Anvil integration test checks that another signed-in user can read listed launch metadata but not owner project details, that drafts and inactive projects are excluded, and that approvals and credentials do not leak into directory output. Gateway tests cover authenticated GET and rejection of writes. Browser verification checks the actual deployed project, real offering/purchase state, real supported model list and the separate Demo navigation.
 
 ## Limited real prompt previews
 

@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-11-08",
+  "scope": "Disposable local Anvil + authenticated MongoDB replica set + actual Rust service",
+  "command": "CARGO_TARGET_DIR=/tmp/cc-central-target /tmp/cc-central-venv/bin/python tests/stake_rust_e2e.py",
+  "result": "passed",
+  "cases": [
+    "buyer wallet signature, wrong signer and replay rejection",
+    "immutable offering price and quantity validation",
+    "no usage before finalized purchase",
+    "real HTTP inference and exact completion-token consumption",
+    "idempotent answer recovery without another charge",
+    "dedicated signed/persisted automatic batch burn",
+    "finalized burn and balances reconcile",
+    "withdrawal fences inference, settles usage, approves and completes",
+    "redeposit finality and provider earned revenue claim",
+    "existing PRL remains locked"
+  ],
+  "contract_unit_tests": {
+    "ComputeCredits": 8,
+    "result": "passed"
+  },
+  "rust_unit_tests": {
+    "passed": 12,
+    "ignored": 1
+  },
+  "frontend_gateway_tests": {
+    "passed": 47
+  },
+  "build": "TypeScript, server ESM and Vite production build passed"
+}

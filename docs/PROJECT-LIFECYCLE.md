@@ -36,4 +36,4 @@ The browser-local `ProjectLaunch` fallback remains a labeled simulation for stan
 
 ## After verification: paid model usage (proposed)
 
-See [Spending credits on launched models](CREDIT-SPENDING.md) for purchase and locking, request reservations, usage accounting, on-chain batch burns, withdrawal reconciliation and proportional collateral release. Normal prompts do not require individual on-chain transactions. These paid-credit steps are not implemented; the existing free prompt preview is separate.
+See [Spending credits on launched models](CREDIT-SPENDING.md) for purchase and locking, request reservations, usage accounting, on-chain batch burns, withdrawal reconciliation and proportional collateral release. Normal prompts do not require individual on-chain transactions. The Sepolia test purchase/escrow, usage accounting, batch burn and unused-token withdrawal are implemented separately from free previews. Existing PRL remains locked; proportional collateral release is future work.

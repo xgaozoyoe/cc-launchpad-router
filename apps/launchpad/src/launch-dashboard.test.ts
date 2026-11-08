@@ -35,3 +35,9 @@ test('capacity approval advances the badge to on-chain verification without clai
  assert.equal(projectBadge({...p,status:'verification-pending'}),'Verification pending finality');
  assert.equal(projectBadge({...p,status:'accepted'}),'Accepted · sales closed');
 });
+
+test('an accepted project advances the sales checklist only with the backend offering flag',()=>{
+ const p={...projects[1],status:'accepted',sales_enabled:true,stake_finalized:true,progress:{bundle_issued:true,last_proxy_at:123,rpc_status:'passed'}};
+ assert.match(projectBadge(p),/Selling test credits/);assert.equal(launchProgress(p)[5].state,'complete');
+ assert.equal(filterLaunches([p],'live','').length,1);assert.equal(filterLaunches([p],'rpc','').length,0);
+});

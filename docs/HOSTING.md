@@ -101,7 +101,7 @@ The registry separately records providers and launches. Each launch binds to the
 
 A connected tunnel proves reachability, not GPU ownership or reserved capacity. Real issuance requires model checks, measured capacity, ongoing availability monitoring and credit accounting.
 
-**Current implementation limits:** the router is a transport starter. Its smoke-test mode forwards the supplier’s Bearer key; buyers must not receive supplier keys. Production buyer access needs the Launchpad gateway to authenticate buyers, check the selected launch’s credit balance, reserve credits, retrieve supplier keys server-side, meter accepted usage and burn the correct credits. That ledger and credential vault are not implemented here. The website’s launch records and this registry are not yet synchronized automatically.
+**Current implementation limits:** the router is a transport starter. Its smoke-test mode forwards the supplier’s Bearer key; buyers must not receive supplier keys. Production buyer access needs the Launchpad gateway to authenticate buyers, check the selected launch’s credit balance, reserve credits, retrieve supplier keys server-side, meter accepted usage and burn the correct credits. The separate integrated Rust central service now handles test paid credits and private provider credentials; see [credit spending](CREDIT-SPENDING.md). This reference transport router does not implement that ledger. The website’s launch records and this registry are not yet synchronized automatically.
 
 ## Troubleshooting
 

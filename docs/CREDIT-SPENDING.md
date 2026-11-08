@@ -1,72 +1,83 @@
-# Spending credits on launched models
+# Buying and spending credits on launched models
 
-Status: proposed design, documented 2026-11-08. This document specifies the intended paid purchase-to-inference flow. It does not describe an implemented credit contract, paid API or production settlement service. Existing real prompt trials remain a separate free, rate-limited preview and do not purchase, reserve or burn credits.
+Implemented test flow, 2026-11-08. Ethereum Sepolia only; use test ETH. Free prompt trials are separate and retain the 2/minute, 100/day account quotas. Existing PRL/tPRL stake remains locked: this release does not add proportional collateral release, slashing or pool fallback.
 
-## Credit identity and unit
+## What a buyer purchases
 
-Credits belong to a specific launch and its model/serving profile. Credits from different launches are not interchangeable, even when they advertise the same model. The offering must fix its committed supply, price, delivery terms and metering unit before purchase. The current concept uses output-token credits; the treatment of input tokens and any weighted pricing must be explicitly defined before implementation, not inferred from a provider's API response.
+Each ERC-1155 token ID is the SHA-256 hash of one internal project UUID, tying the credits to its launch, model profile and provider. An authorized provider or offering manager creates an immutable supply, price in wei per credit, and model-ID hash after the original stake contract reports Verified. Sales can be closed. Verification alone does not create an offering.
 
-## Buyer journey
+In this test, **one credit pays for one reported completion/output token**. Input tokens are shown but not billed. The initial Qwen3 offer has 1,000,000 credits at 1,000,000,000 wei each: 0.001 Sepolia ETH per million credits. Network gas is additional. No production price or throughput guarantee is implied.
 
-1. Select a verified launch, read its terms and optionally try the real model through the free preview.
-2. Connect and bind the buyer wallet to the authenticated account. A wallet ownership signature is off-chain and does not itself purchase or transfer tokens.
-3. Purchase credits through the offering contract. The backend recognizes purchased credit balances only after validating canonical, finalized purchase events; a browser claim or transaction hash alone is insufficient.
-4. Lock credits in a usage contract. Purchase and locking may be combined into a single transaction. Otherwise a separate deposit transaction is required. Freely transferable wallet tokens cannot also be treated as spendable API balances: they must first be placed under the usage contract's spending rules.
-5. Submit a prompt through the platform's launch-specific API. The backend atomically reserves the maximum billable credits before forwarding to the assigned provider. Normal prompts do not require wallet confirmation or a separate blockchain transaction.
-6. On successful delivery, record billable usage, mark the actual amount consumed awaiting settlement, and release unused reservation. On a failed request with no billable output, release the reservation without consuming credits. Interrupted streams and partial delivery require an explicit billable-delivery policy before streaming is enabled.
-7. A platform-authorized settler periodically submits an on-chain batch burn against locked credits. Track each settlement until finalized, then move the consumed amount into burned history. Do not count a submitted or reverted burn as finalized spending.
-8. Withdraw unused locked credits only after reconciling active reservations and unsettled usage. A withdrawal request must fence off the requested amount from new inference and settle outstanding consumption before contract withdrawal is allowed. Immediate withdrawal of the entire on-chain deposit would otherwise allow double spending against an off-chain reservation.
+## Buyer steps
 
-## Balance states
+1. Sign in, choose a real launch and open **Buy & use test credits**. Read the model, provider, price and terms. The optional free preview uses the same actual provider API.
+2. Connect a browser wallet. The app requests the configured chain and verifies the switch. Sign a five-minute, account/origin/chain/contract-bound EIP-191 challenge. The backend recovers the signer; each account is bound to one buyer wallet, and a wallet cannot bind to two accounts. Changing that binding is not supported in this test.
+3. Confirm `buyAndLock(project, quantity)` in the wallet, paying the exact Sepolia ETH price. Credits mint directly into contract escrow and are credited to the buyer’s locked balance. There is no payment-token approval. The UI shows incoming credits, but the API accepts them only after Ethereum **finality**, not merely a mined receipt. This may take several minutes.
+4. Submit a prompt in the launch’s paid page. The backend checks finalized stake/verification and provider consent, serializes requests for the wallet/launch and provider, and durably reserves the maximum requested output (16–256 tokens). It forwards only to the assigned FRPC ingress, injecting the private provider key. Buyers never receive that key.
+5. Valid non-streaming generation consumes exactly the reported completion tokens. The remainder of the reservation becomes available. Known provider errors consume zero credits. The UI shows the response, usage and consumed amount awaiting settlement. Ordinary prompts need no wallet signature or transaction.
+6. A dedicated platform settler periodically batches consumed requests, signs a transaction, persists its raw bytes/hash, then broadcasts. Retries rebroadcast the same transaction. The contract prevents reuse of a usage ID or changed reuse of a batch ID. A mined burn is pending until canonical Ethereum finality. Burned history links to the transaction.
+7. The burn accrues the corresponding ETH to the offering’s provider. Only that provider wallet can call `claimRevenue()`. Unused purchase funds remain in the escrow to fund future consumption; providers cannot withdraw the entire sale proceeds upfront.
 
-| State | Meaning |
+The app has a **My credits** page with separate balances per launch, rather than an interchangeable total across models/providers. The launch page refreshes balances every ten seconds while visible.
+
+## Unused credits: withdrawal and redeposit
+
+There is **no ETH refund** in this test. Withdrawal returns unconsumed ERC-1155 credit tokens to the buyer wallet, where they are not available to the inference API.
+
+1. Buyer submits `requestWithdrawal(project, amount)`. New inference for that wallet/launch is fenced off as soon as the request is observed at latest or finalized state.
+2. The settler waits for the request’s finality, no active reservations, and all recorded consumption to be burned and finalized. It submits `approveWithdrawal(project, buyer, nonce, amount)`.
+3. Once approval is finalized, the buyer signs `completeWithdrawal(project)`. Alternatively, the buyer may sign `cancelWithdrawal(project)`; the nonce prevents stale approvals from authorizing a later request.
+4. Buyer may sign `depositCredits(project, amount)` to return wallet tokens to usage escrow. No ERC-1155 operator allowance is needed for the owner’s own deposit. Deposits become usable after finality.
+
+Tokens transferred to another wallet can be redeposited by their new owner. The platform supports one bound EOA per account; smart-contract wallet signature validation is not implemented. Withdrawal and revenue claiming still require wallet gas.
+
+## What is recorded where
+
+| Record/action | Location |
 | --- | --- |
-| Wallet credits | Held in the buyer's wallet; not yet available to the API |
-| Available | Finalized locked credits not reserved, consumed or pending withdrawal |
-| Reserved | Temporarily allocated to an in-progress inference request |
-| Consumed, awaiting settlement | Billable delivery recorded in the backend; on-chain burn not finalized |
-| Burned | Consumption settled and finalized on-chain |
-| Pending withdrawal | Unspent credits fenced from new usage while withdrawal is reconciled |
+| Offering, immutable price/supply/model hash | New `ComputeCredits` contract |
+| Purchase, deposit, withdrawal and per-buyer locked totals | Contract state/events |
+| Prompt execution and maximum reservation | Rust service and durable MongoDB request metadata |
+| Actual completion-token consumption | MongoDB immediately; on-chain after batch burn |
+| Batch ID, usage-ID replay guards, burns and earned revenue | Contract state/events |
+| Buyer wallet ownership proof | Signed off-chain challenge verified by backend |
+| Prompt text | Sent to provider, not stored by the platform |
+| Response text | Private account/wallet-bound MongoDB recovery cache for 15 minutes |
+| Usage, request ID, burn transaction and settlement history | Durable metadata; not erased with response cache |
+| Original PRL/tPRL stake | Existing stake contract, unchanged and locked |
 
-These must be separate balances in the UI. Backend records should reconcile finalized deposits, burns and withdrawals with reservations and unsettled consumption. Off-chain consumption is immediate accounting; it is not itself an on-chain burn.
+Authoritative purchased/deposited/burned/withdrawn quantities are read from `accountState` at finalized and latest block tags. This release does not run a separate purchase-log indexer. Available usage is conservatively reconciled with all recorded consumption, active reservations, latest withdrawals and the current locked balance, so incoming deposits or pending withdrawals cannot manufacture availability.
 
-## On-chain transactions
+## Failure and trust boundaries
 
-| Actor | Transaction | Frequency/condition |
+Unique client request IDs bind to wallet + project. Replaying a completed request recovers the same answer for up to 15 minutes without generating or charging again. **Recover last request** is the safe action after a timeout. Unknown/interrupted in-flight requests remain reserved for operator reconciliation; they are not automatically billed or silently retried. Paid streaming and partial-response billing are not enabled.
+
+MongoDB runs as a replica set with majority/journaled writes. Response-cache insertion and transition from reserved maximum to actual consumption commit in one transaction. Batch membership and queued actions also commit together. Signed transactions are saved before broadcast; the service resumes them after restart. Settlement errors remain visible and keep consumption unavailable. A chain-monitor halt blocks new purchase preparation/inference and settlement. Existing already-signed on-chain transactions and direct contract calls remain subject to their contract rules.
+
+The platform settler is trusted to report usage correctly within escrow limits. The provider’s token counts and model ID are validated, but this is not cryptographic proof of GPU capacity, model weights or inference delivery. No public-pool replacement provider participates in this paid test. The contracts are test software, not audited production payment infrastructure.
+
+## Contract transactions
+
+| Actor | Call | When |
 | --- | --- | --- |
-| Platform operator | Register the provider project | Current staking setup |
-| Provider | ERC-20 PRL allowance, then project stake | Allowance only if insufficient; stake once per project |
-| Authorized verifier | Verify the project | After acceptance checks, before the original stake-based deadline |
-| Provider | Create the credit offering with fixed supply and terms | Before opening sales |
-| Buyer | Approve an ERC-20 payment token | Only when paying with an ERC-20 and allowance is insufficient |
-| Buyer | Purchase credits | Each purchase; native ETH payment avoids ERC-20 payment approval |
-| Buyer | Approve/deposit credits into usage escrow | Token-standard dependent; may be combined with purchase |
-| Authorized settler | Burn consumed locked credits in a batch | Periodic settlement; never burn arbitrary unlocked wallet tokens |
-| Provider | Withdraw collateral made free by finalized settlement | When a withdrawable balance exists |
-| Buyer | Withdraw reconciled unused credits | After pending usage/withdrawal checks |
+| Provider / offer manager | `createOffering` | Once, after finalized project verification |
+| Buyer | `buyAndLock` (payable) | Each purchase |
+| Buyer | `depositCredits` | Returning wallet tokens to usage escrow |
+| Dedicated settler | `settleBatch` | Periodic consumed-credit burns |
+| Buyer | `requestWithdrawal` / `cancelWithdrawal` | Requesting or canceling an unused-token withdrawal |
+| Dedicated settler | `approveWithdrawal` | After usage reconciliation and finality |
+| Buyer | `completeWithdrawal` | After approval |
+| Provider | `claimRevenue` | To collect ETH earned from settled output |
 
-EOA binding signatures, prompts, reservations and MongoDB usage entries are not blockchain transactions. Reading balances or checking transaction status is also not an on-chain transaction. Native Sepolia ETH is a suggested initial test-payment option, not an implemented or finalized production payment choice. Credit token standard, escrow/withdrawal protocol, payment custody and supplier payment timing still require contract design.
+Original project registration, tPRL approval/stake and verifier `verifyProject` remain separate prerequisite transactions. Reading balances, signing wallet binding, sending prompts and recording reservations are not on-chain transactions.
 
-## Backend accounting and settlement integrity
+## Operator configuration and tests
 
-Proposed records include offerings, wallet/account bindings, finalized purchases/deposits, per-launch user balances, inference requests/reservations, usage records, settlement batches/items, finalized burns, withdrawals and an event-indexing checkpoint. None of these paid-credit ledgers should be confused with the existing free-trial quota collections.
+- `CREDIT_CONFIG_FILE`: JSON with `chain_id`, `contract`, `staking_contract`, `settler`, `deployment_block`; must match the configured stake chain. Deployment reference: `config/deployments/credits-sepolia.json`.
+- `CREDIT_SETTLER_KEYSTORE` and `CREDIT_SETTLER_PASSWORD_FILE`: private encrypted dedicated settler wallet. `STAKE_CAST` and `CHAIN_RPC_URL` supply existing signing/RPC tools. Keep secrets outside Git and browser bundles. Fund this wallet with Sepolia gas; it must hold `SETTLER_ROLE` on the new contract. The worker checks stake-contract binding, role and signer address.
+- `contracts/script/DeployCredits.s.sol`: Foundry deployment script, restricted to Sepolia/31337; separate from existing `LaunchStake` deployment. Always compare the chain RPC’s creation-gas estimate to Foundry’s local estimate before broadcast. The installed Foundry 1.5.1 underestimated this Sepolia deployment; the successful run used `--gas-estimate-multiplier 1000` after RPC simulation confirmed the higher requirement.
+- Project owner must enable `paid_enabled` through the existing private RPC credential consent panel. An admin RPC-test credential alone does not permit paid use.
+- `forge test --root contracts --match-contract ComputeCreditsTest` verifies contract accounting, purchase bounds, replay, withdrawals and earned revenue.
+- `tests/stake_rust_e2e.py` exercises actual Rust + authenticated MongoDB + disposable Anvil, including buyer proof, purchase finality, inference, replay/recovery, automatic burns, withdrawal fencing, redeposit and revenue claiming.
 
-Use durable unique request IDs and atomic balance reservations. A retried request must not generate or charge twice. Associate usage with the actual delivering provider and launch; reported API token counts need a defined metering/trust policy. Persist a batch identifier and item membership before broadcasting settlement, prevent an item from entering multiple batches, and make contract settlement idempotent. A crash, RPC timeout or transaction replacement must trigger reconciliation of the existing transaction/batch rather than a blind second charge.
-
-The backend and chain indexer must handle failed transactions, finality and reorgs. Unfinalized incoming credits must not become spendable; submitted burns must not release collateral. Prompts and outputs should not be put on-chain. Paid prompt/output retention and provider privacy terms must be defined separately from required usage/accounting metadata.
-
-## Provider collateral and fallback
-
-Initially lock all stake. Under the agreed target rule:
-
-`cumulative unlocked PRL = floor(initial stake × this provider's successfully delivered and settled credits / fixed committed credit supply)`
-
-Cap cumulative unlocked PRL at the initial stake. Free collateral is unlocked but not yet withdrawn; returned collateral has already been transferred to the provider wallet. Only finalized, eligible settlement can increase free collateral. Failed requests, unsettled usage and public-pool replacement delivery do not count toward the original provider's fulfillment. Record fallback delivery separately and settle it under an explicit fallback funding/billing policy; do not charge the same request twice.
-
-The authorized settler is trusted to submit correct usage accounting within contract limits. Locking prevents wallet-transfer double spending but does not cryptographically prove that inference happened. Settlement evidence/disputes, role limits, withdrawal fencing, pricing/metering and payment release require explicit design before enabling paid sales.
-
-## Current implementation boundary
-
-Implemented: project registration, test tPRL approval/stake, finalized stake monitoring, project-bound FRPC/API checks, admin verification, real project directory and limited free prompt trials.
-
-Not implemented: paid credit offering/issuance, payment, buyer credit escrow/ledger, paid reservations, credit burns, batch settlement, buyer withdrawals, proportional collateral unlocking, provider revenue settlement or public-pool delivery billing. The deployed stake contract currently supports whole-stake release/refund rather than the proposed partial unlock/withdraw mechanism. Purchasing must stay disabled until the paid flow and its contract rules are implemented and tested.
+Proportional PRL freeing remains the agreed future rule: `floor(initial stake × provider-delivered finalized-settled credits / committed supply)`. The existing stake contract cannot implement it, and no “free PRL” is invented from this credit ledger.

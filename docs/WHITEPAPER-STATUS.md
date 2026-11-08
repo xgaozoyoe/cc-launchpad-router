@@ -1,6 +1,6 @@
 # White paper status
 
-The [10-slide PowerPoint](../apps/launchpad/public/whitepaper/ai-computing-credit-launchpad.pptx) was revised on 2026-11-07. It describes the product design and the current Sepolia prototype separately. Planned flows are labeled on-slide; the last slide lists connected capabilities and remaining work. It is not a claim that inference credit sales are operational.
+The [10-slide PowerPoint](../apps/launchpad/public/whitepaper/ai-computing-credit-launchpad.pptx) was revised on 2026-11-07. It describes the product design and the current Sepolia prototype separately. Planned flows are labeled on-slide; the last slide lists connected capabilities and remaining work. The deck predates the test credit-purchase integration. For the current Sepolia purchase/usage/burn and withdrawal implementation, use [credit spending](CREDIT-SPENDING.md); pool fallback and proportional PRL release remain planned.
 
 | Slide | Content |
 | --- | --- |

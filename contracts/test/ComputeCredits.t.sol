@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+import {ComputeCredits} from "../src/ComputeCredits.sol";
+interface CreditVm {function prank(address) external;function deal(address,uint256) external;function expectRevert() external;}
+contract VerifiedFixture {uint8 public state=3;address public provider=address(0x1234);function setState(uint8 s)external{state=s;}function stakeState(bytes32)external view returns(uint8,uint256,uint64,uint64,address){return(state,2000 ether,1,86401,provider);}}
+contract ComputeCreditsTest {
+ CreditVm constant vm=CreditVm(address(uint160(uint256(keccak256("hevm cheat code")))));ComputeCredits c;VerifiedFixture s;address buyer=address(0xB0B);bytes32 p=keccak256("project");uint256 price=1 gwei;
+ function setUp()public{s=new VerifiedFixture();c=new ComputeCredits(address(s),address(this),address(this),address(this));c.createOffering(p,1_000_000,price,keccak256("qwen3-8b-awq"));vm.deal(buyer,1 ether);}
+ function buy(uint256 n)internal{vm.prank(buyer);c.buyAndLock{value:n*price}(p,n);}
+ function settle(bytes32 batch,bytes32 usage,uint256 n)internal{bytes32[] memory ps=new bytes32[](1);ps[0]=p;address[] memory bs=new address[](1);bs[0]=buyer;uint256[] memory ns=new uint256[](1);ns[0]=n;bytes32[] memory us=new bytes32[](1);us[0]=usage;c.settleBatch(batch,ps,bs,ns,us);}
+ function testPurchaseLocksRatherThanMintingSpendableWalletTokens()public{buy(1000);require(c.accountState(p,buyer).locked==1000&&c.balanceOf(buyer,uint256(p))==0&&c.balanceOf(address(c),uint256(p))==1000);}
+ function testWrongValueOversellAndUnverifiedPurchaseFail()public{vm.expectRevert();vm.prank(buyer);c.buyAndLock{value:1}(p,1000);vm.expectRevert();buy(1_000_001);s.setState(5);vm.expectRevert();buy(1000);}
+ function testOnlyProviderOrManagerCanDefineAnImmutableOffer()public{vm.expectRevert();c.createOffering(p,100,price,keccak256("qwen3-8b-awq"));vm.expectRevert();vm.prank(buyer);c.createOffering(keccak256("other"),100,price,keccak256("qwen3-8b-awq"));}
+ function testBurnAccruesRevenueAndExactBatchReplayIsIdempotent()public{buy(1000);settle(keccak256("b"),keccak256("r"),41);settle(keccak256("b"),keccak256("r"),41);require(c.accountState(p,buyer).locked==959&&c.accountState(p,buyer).burned==41&&c.revenue(address(0x1234))==41*price);vm.expectRevert();settle(keccak256("b"),keccak256("other"),40);vm.expectRevert();settle(keccak256("other-b"),keccak256("r"),41);}
+ function testUnreconciledWithdrawalCannotRemoveCreditsAndCannotApproveItself()public{buy(1000);vm.prank(buyer);c.requestWithdrawal(p,1000);vm.expectRevert();vm.prank(buyer);c.completeWithdrawal(p);vm.expectRevert();vm.prank(buyer);c.approveWithdrawal(p,buyer,1,1000);}
+ function testOutstandingUsageSettlesBeforeUnusedCreditsWithdrawAndCanBeDepositedAgain()public{buy(1000);vm.prank(buyer);c.requestWithdrawal(p,1000);settle(keccak256("b"),keccak256("r"),100);c.approveWithdrawal(p,buyer,1,900);vm.expectRevert();settle(keccak256("b2"),keccak256("r2"),1);vm.prank(buyer);c.completeWithdrawal(p);require(c.balanceOf(buyer,uint256(p))==900&&c.accountState(p,buyer).locked==0);vm.prank(buyer);c.depositCredits(p,500);require(c.accountState(p,buyer).locked==500&&c.balanceOf(buyer,uint256(p))==400);}
+ function testRevenueIsUnavailableUntilBurnAndClaimCannotRepeat()public{buy(1000);vm.expectRevert();vm.prank(address(0x1234));c.claimRevenue();settle(keccak256("b"),keccak256("r"),100);uint256 beforeBalance=address(0x1234).balance;vm.prank(address(0x1234));c.claimRevenue();require(address(0x1234).balance==beforeBalance+100*price);vm.expectRevert();vm.prank(address(0x1234));c.claimRevenue();}
+ function testCancelledWithdrawalInvalidatesOldApprovalNonce()public{buy(1000);vm.prank(buyer);c.requestWithdrawal(p,1000);vm.prank(buyer);c.cancelWithdrawal(p);vm.prank(buyer);c.requestWithdrawal(p,900);vm.expectRevert();c.approveWithdrawal(p,buyer,1,900);}
+}

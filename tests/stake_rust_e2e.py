@@ -34,8 +34,8 @@ def run():
    with urllib.request.urlopen(req,timeout=10) as r:d=json.load(r)
    if 'error' in d:raise AssertionError(d['error'])
    return d['result']
-  def send(sender,to,data):
-   tx={'from':sender,'data':data,'gas':'0x400000'}
+  def send(sender,to,data,value=0):
+   tx={'from':sender,'data':data,'gas':'0x800000','value':hex(value)}
    if to:tx['to']=to
    h=rpc('eth_sendTransaction',[tx]);r=wait(lambda:rpc('eth_getTransactionReceipt',[h]));assert r['status']=='0x1';return r
   selector=lambda s:keccak(text=s)[:4].hex()
@@ -53,12 +53,17 @@ def run():
    assert code==expected,(path,code,data)
    return data
   try:
-   start([str(FOUNDRY/'anvil'),'--host','127.0.0.1','--port',str(chain_port),'--silent'])
+   start([str(FOUNDRY/'anvil'),'--host','127.0.0.1','--port',str(chain_port),'--silent','--cache-path',str(tmp/'anvil-cache'),'--prune-history','100000'])
    admin=wait(lambda:rpc('eth_accounts',[]))[0]
    token_bytecode=json.loads((ROOT/'contracts/out/TestPRL.sol/TestPRL.json').read_text())['bytecode']['object']
    stake_bytecode=json.loads((ROOT/'contracts/out/LaunchStake.sol/LaunchStake.json').read_text())['bytecode']['object']
    token_receipt=send(admin,None,token_bytecode+addr(admin)+word(1000000*10**18));token=token_receipt['contractAddress']
    escrow=send(admin,None,stake_bytecode+addr(token)+addr(admin))['contractAddress']
+   settler=Account.create();rpc('anvil_setBalance',[settler.address,hex(10**18)])
+   credits_code=json.loads((ROOT/'contracts/out/ComputeCredits.sol/ComputeCredits.json').read_text())['bytecode']['object']
+   credit_receipt=send(admin,None,credits_code+addr(escrow)+addr(admin)+addr(settler.address)+addr(admin));credits=credit_receipt['contractAddress']
+   (tmp/'settler.json').write_text(json.dumps(Account.encrypt(settler.key,'test-password')))
+   (tmp/'credits.json').write_text(json.dumps({'chain_id':31337,'contract':credits,'staking_contract':escrow,'settler':settler.address,'deployment_block':int(credit_receipt['blockNumber'],16)}))
    provider=Account.create();rpc('anvil_setBalance',[provider.address,hex(10**18)]);rpc('anvil_impersonateAccount',[provider.address])
    send(admin,token,'0x'+selector('transfer(address,uint256)')+addr(provider.address)+word(2000*10**18))
    assert int(rpc('eth_chainId',[]),16)==31337
@@ -76,6 +81,7 @@ def run():
    config={'chain_id':31337,'staking_contract':escrow,'token_address':token,'deployment_block':int(token_receipt['blockNumber'],16)}
    (tmp/'chain.json').write_text(json.dumps(config))
    env.update(MONGODB_URI=f'mongodb://launchpad:{app_pw}@127.0.0.1:{mongo_port}/launchpad?replicaSet=rs0&authSource=launchpad',CENTRAL_HMAC_KEY_FILE=str(tmp/'hmac'),BIND_ADDRESS=f'127.0.0.1:{api_port}',CHAIN_CONFIG_FILE=str(tmp/'chain.json'),CHAIN_RPC_URL=rpc_url,CHAIN_ALLOW_LOCAL='1',APP_ORIGIN='http://localhost:4174',STAKE_CAST=str(FOUNDRY/'cast'),STAKE_KEYSTORE=str(tmp/'operator.json'),STAKE_PASSWORD_FILE=str(tmp/'password'))
+   env.update(CREDIT_CONFIG_FILE=str(tmp/'credits.json'),CREDIT_SETTLER_KEYSTORE=str(tmp/'settler.json'),CREDIT_SETTLER_PASSWORD_FILE=str(tmp/'password'))
    (tmp/'frpc').write_bytes(b'test-binary');(tmp/'ca').write_text('test-cert');(tmp/'transport').write_text('transport-key');(tmp/'license').write_text('license')
    bundle_config={'python':os.environ.get('BUNDLE_PYTHON','python3'),'helper':str(ROOT/'scripts/provider_bundle.py'),'server_addr':'127.0.0.1','server_port':7000,'tls_server_name':'localhost','frpc_binary':str(tmp/'frpc'),'frpc_sha256':hashlib.sha256(b'test-binary').hexdigest(),'ca_file':str(tmp/'ca'),'transport_token_file':str(tmp/'transport'),'license_file':str(tmp/'license'),'credential_dir':str(tmp/'credentials')}
    (tmp/'bundles.json').write_text(json.dumps(bundle_config));env['PROVIDER_BUNDLE_CONFIG']=str(tmp/'bundles.json')
@@ -295,6 +301,51 @@ def run():
    assert hook(third_login)['reject'] is False
    assert api('GET',third_path)['project']['status']=='accepted'
    assert api('GET','/api/v1/status')['sales_enabled'] is False
+   # Paid end-to-end flow: real chain escrow, wallet ownership, inference, batch burn, withdrawal.
+   credit_path='/api/v1/credits/'+third_id
+   api('POST',credit_path+'/purchase',{'quantity':1000},user='paid-buyer',expected=409)
+   buyer=Account.create();rpc('anvil_setBalance',[buyer.address,hex(10**18)]);rpc('anvil_impersonateAccount',[buyer.address])
+   ch=api('POST','/api/v1/credits/wallet/challenge',{'wallet_address':buyer.address},user='paid-buyer')
+   wrong=Account.sign_message(encode_defunct(text=ch['message']),provider.key).signature.hex()
+   api('POST','/api/v1/credits/wallet/bind',{'challenge_id':ch['challenge_id'],'signature':'0x'+wrong.removeprefix('0x')},user='paid-buyer',expected=403)
+   sig=Account.sign_message(encode_defunct(text=ch['message']),buyer.key).signature.hex();proof={'challenge_id':ch['challenge_id'],'signature':'0x'+sig.removeprefix('0x')}
+   api('POST','/api/v1/credits/wallet/bind',proof,user='paid-buyer')
+   api('POST','/api/v1/credits/wallet/bind',proof,user='paid-buyer',expected=403)
+   api('POST',credit_path+'/purchase',{'quantity':1000},user='paid-buyer',expected=409) # no paid consent / offering
+   api('POST',third_path+'/deployment/rpc-credential',{'paid_enabled':True})
+   key3=project_key_for_test(third_id)
+   send(admin,credits,'0x'+selector('createOffering(bytes32,uint256,uint256,bytes32)')+key3+word(1000000)+word(10**9)+keccak(text='qwen3-8b-awq').hex());rpc('anvil_mine',['0x80'])
+   directory=api('GET','/api/v1/launchpad');offer=next(p for p in directory['launches'] if p['_id']==third_id)
+   assert offer['sales_enabled'] and offer['credit_offer']['price_wei_per_credit']=='1000000000'
+   api('POST',credit_path+'/purchase',{'quantity':1000,'price':0},user='paid-buyer',expected=400)
+   prepared=api('POST',credit_path+'/purchase',{'quantity':1000},user='paid-buyer')['transaction']
+   assert prepared['from']==buyer.address.lower() and int(prepared['value'],16)==1000*10**9 and prepared['to']==credits.lower()
+   send(buyer.address,credits,prepared['data'],int(prepared['value'],16))
+   pending=api('GET',credit_path,user='paid-buyer');assert pending['available']=='0' and pending['incoming_pending']=='1000'
+   rpc('anvil_mine',['0x80'])
+   assert api('GET',credit_path,user='paid-buyer')['available']=='1000'
+   request={'request_id':str(uuid.uuid4()),'prompt':'Paid greeting','max_output_tokens':128}
+   result=api('POST',credit_path+'/infer',request,user='paid-buyer');assert result['result']['text']=='hello' and result['consumed']==3
+   replay=api('POST',credit_path+'/infer',request,user='paid-buyer');assert replay['replayed'] and replay['result']['text']=='hello'
+   assert api('GET',credit_path,user='paid-buyer')['available']=='997'
+   api('GET',credit_path+'/request/'+result['request_id'],user='alice',expected=409) # no bound wallet
+   recovered=api('GET',credit_path+'/request/'+result['request_id'],user='paid-buyer');assert recovered['result']['text']=='hello'
+   def finalized_burn():
+    time.sleep(1);rpc('anvil_mine',['0x80'])
+    b=api('GET',credit_path,user='paid-buyer');return b if b['finalized']['burned']=='3' and b['requests'][0]['status']=='settled' else None
+   settled=wait(finalized_burn,150);assert settled['available']=='997' and settled['consumed_pending']=='0'
+   tx=api('POST',credit_path+'/withdraw',{'quantity':997},user='paid-buyer')['transaction'];send(buyer.address,credits,tx['data']);rpc('anvil_mine',['0x80'])
+   api('POST',credit_path+'/infer',{**request,'request_id':str(uuid.uuid4())},user='paid-buyer',expected=409)
+   def approved_withdrawal():
+    time.sleep(1);rpc('anvil_mine',['0x80']);return api('GET',credit_path,user='paid-buyer')['finalized']['withdrawal_approved']
+   wait(approved_withdrawal,150)
+   tx=api('POST',credit_path+'/complete-withdrawal',{},user='paid-buyer')['transaction'];send(buyer.address,credits,tx['data']);rpc('anvil_mine',['0x80'])
+   withdrawn=api('GET',credit_path,user='paid-buyer');assert withdrawn['available']=='0' and withdrawn['finalized']['withdrawn']=='997'
+   tx=api('POST',credit_path+'/deposit',{'quantity':500},user='paid-buyer')['transaction'];send(buyer.address,credits,tx['data']);rpc('anvil_mine',['0x80'])
+   assert api('GET',credit_path,user='paid-buyer')['available']=='500'
+   assert int(rpc('eth_call',[{'to':credits,'data':'0x'+selector('revenue(address)')+addr(provider.address)},'latest']),16)==3*10**9
+   send(provider.address,credits,'0x'+selector('claimRevenue()'))
+   print('PASS paid credits: wallet signatures, immutable purchase terms, finality balance fence, real inference, idempotent recovery, persisted batch burn, revenue, withdrawal reconciliation and redeposit; existing PRL unchanged.')
    rpc('evm_revert',[snapshot])
    wait(lambda:api('GET','/api/v1/status')['chain']['halted'],60)
    assert api('GET','/api/v1/status')['sales_enabled'] is False

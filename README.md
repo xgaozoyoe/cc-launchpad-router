@@ -39,7 +39,7 @@ The production workspace runs at https://riddle.xyz. Google login, account-owned
 
 ## Stake contract and event monitor
 
-The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; simulated purchases and balances are isolated in the Demo workspace. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). Functional RPC checks and [wallet-authorized admin review](docs/ADMIN-REVIEW.md) are integrated. Manual demo capacity approval and finalized `verifyProject` acceptance do not enable sales.
+The [stake contract and monitor guide](docs/STAKING-CONTRACT.md) covers the ERC-20 escrow, finalized `ProjectStaked` events, durable Launch ID issuance and private FRPC bundles. The development default is Ethereum Sepolia (11155111); the deployed test-only tPRL and stake contract addresses are recorded in [the Sepolia manifest](config/deployments/sepolia.json). Project drafts use Rust + MongoDB; simulated purchases and balances are isolated in the Demo workspace. Wallet binding, operator project registration and finalized stake-event indexing are now integrated in Rust; see [the active staking guide](docs/RUST-STAKING.md). Functional RPC checks and [wallet-authorized admin review](docs/ADMIN-REVIEW.md) are integrated. Manual demo capacity approval and finalized `verifyProject` acceptance alone do not enable sales; a separate credit offering and paid API consent are required.
 
 ## Stake-gated publishing
 
@@ -105,7 +105,7 @@ These are private central-host registration lists, not public buyer endpoints or
 
 ## Implementation limits
 
-This is a transport/provisioning starter. The router’s operator test mode forwards the supplier Bearer key. Production must authenticate buyers, validate credits for the launch ID, reserve credits, inject the supplier key from a server-side vault, meter accepted usage and burn the correct launch’s credits. Buyer authentication, the credit ledger, vault, issuance transaction, PRL settlement and failover are not implemented here. Never give supplier keys to buyers.
+This is a transport/provisioning starter. The router’s operator test mode forwards the supplier Bearer key. Production must authenticate buyers, validate credits for the launch ID, reserve credits, inject the supplier key from a server-side vault, meter accepted usage and burn the correct launch’s credits. The integrated Rust central service now supplies wallet-bound purchasing, private provider-key injection, usage reservations and batch burns for the test credit contract. This separate reference router does not implement that paid ledger. PRL release and failover remain future work. Never give supplier keys to buyers.
 
 The default website uses real server projects and provider setup. Buyer inference is available only as an explicit Demo simulation; real server projects and finalized Launch IDs are not automatically synchronized with this separate reference FRP registry. The platform should register the same launch ID when issuance is approved. Aggregate capacity across multiple launches must be checked before issuing real credits.
 
@@ -147,4 +147,4 @@ The default website now shows the [real Launchpad directory](docs/REAL-LAUNCHPAD
 
 Verified providers can enable [limited real prompt trials](docs/PROMPT-TRIALS.md): signed-in users test actual inference before purchasing, with server-enforced account quotas, project caps and concurrency limits. Preview access does not activate credit sales or settlement.
 
-The proposed paid model-usage process is documented in [Spending credits on launched models](docs/CREDIT-SPENDING.md): on-chain purchase/usage escrow, backend reservations and metering, finalized batch burns, unused-credit withdrawal and settlement-based PRL release. It is a design specification; paid credit spending is not implemented yet.
+The implemented Sepolia test [purchase and spending flow](docs/CREDIT-SPENDING.md) covers fixed-price ERC-1155 offerings, ETH purchase/usage escrow, backend reservations, real inference, finalized batch burns, earned provider revenue and unused-credit withdrawal. Existing PRL remains locked; proportional release is not part of this test.

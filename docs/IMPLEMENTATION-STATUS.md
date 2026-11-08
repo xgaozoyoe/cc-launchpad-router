@@ -20,9 +20,10 @@ The integrated origin is **https://riddle.xyz**. Caddy terminates HTTPS, Node se
 | Unverified expired refund | Contract supports provider `refundExpired`; no automated refund or UI withdrawal flow |
 | Full verified release | Contract supports trusted settler `releaseStake`; application settlement is not integrated |
 | Default project directory and provider setup | Real backend records and model registry; no seeded offers or simulated balances |
+| Real buyer purchasing and usage | New test credit escrow, wallet proof, finalized balances, actual API inference and automatic batch burns; existing PRL stays locked |
 | Buyer offers, credits, PRL wallet, inference and pool in `/#demo` | Explicit concept simulations/browser-local data, not production token balances or measured GPU capacity |
 
-Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. `sales_enabled` remains false: real sales/payment escrow, buyer credit accounting, usage burns, provider settlement, slashing and public-pool failover are **not connected**.
+Publishing can advance from `awaiting-rpc` through signed manual demo capacity approval and `verification-pending` to finalized on-chain `accepted`. See [admin review](ADMIN-REVIEW.md). This is not a measured capacity benchmark. A separate test-only `ComputeCredits` contract adds fixed offers, Sepolia ETH purchase/escrow, wallet-bound buyer balances, paid inference reservations, batch burns and earned provider revenue. Offers require separate creation and provider paid-inference consent. Slashing, proportional PRL release and public-pool failover remain unimplemented. See [credit spending](CREDIT-SPENDING.md).
 
 ## Contracts and recorded evidence
 
@@ -30,7 +31,9 @@ Ethereum Sepolia chain ID: 11155111. The token is test-only tPRL, not real PRL.
 
 - tPRL: `0x3347f108f03287bdb39cba95f40f7f39e6dff1f8`
 - LaunchStake: `0xe5b29f59c9c90b7fbde165273a3464a35875c58c`
-- [Deployment manifest](../config/deployments/sepolia.json)
+- ComputeCredits: `0x4c18665f28ac99745edda9b62cf3668ff0f62faf`
+- [Credit deployment and roles](../config/deployments/credits-sepolia.json) · [Initial Qwen test offering](../config/deployments/credit-offer-sepolia.json)
+- [Stake deployment manifest](../config/deployments/sepolia.json)
 - [Recorded 2,000 tPRL stake and finalized Launch ID](../config/test-results/sepolia-stake.json)
 
 A stake is collateral and an eligibility requirement; possession of tPRL alone does not prove GPU ownership, model correctness or exclusive available capacity. Contract verification is a trusted verifier action. No production PRL token integration or external contract audit is claimed.
@@ -63,6 +66,6 @@ Real local FRP transport was tested against mock inference. GPU model loading an
 
 When adding a feature, update its implementation, tests and this inventory together. Keep private deployment configuration, keys and logs out of public documentation.
 
-The default UI now uses the authenticated [real launch directory](REAL-LAUNCHPAD.md), with public metadata from finalized-stake projects and actual verification status. Private drafts and account/configuration fields are excluded. The old seeded offers, credit balances and public-pool UI are isolated under `/#demo`. Real My credits states the ledger is not connected; purchasing remains disabled.
+The default UI now uses the authenticated [real launch directory](REAL-LAUNCHPAD.md), with public metadata from finalized-stake projects and actual verification status. Private drafts and account/configuration fields are excluded. The old seeded offers, credit balances and public-pool UI are isolated under `/#demo`. My credits now reads per-launch chain escrow balances and backend reservations. Buy & use supports test ETH purchases, bounded real inference, burn history and reconciled unused-token withdrawals.
 
-The intended paid-credit flow and its transaction/state boundaries are specified in [Spending credits on launched models](CREDIT-SPENDING.md). Purchase, usage escrow, paid reservations, burn settlement and proportional collateral unlocking remain proposed; this documentation does not activate sales.
+The implemented test paid-credit flow and its transaction/state boundaries are specified in [Spending credits on launched models](CREDIT-SPENDING.md). Existing PRL stays locked; proportional collateral unlocking remains future work.

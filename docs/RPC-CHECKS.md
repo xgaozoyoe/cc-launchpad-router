@@ -29,7 +29,7 @@ There is one MongoDB-backed test lease per project, bounded response sizes, HTTP
 - `GET /api/v1/projects/<id>/deployment/rpc-check`: saved report and in-progress flag, no key.
 - Browser routes use `/api/central/…`; POST requires the application Origin.
 
-**A pass does not call `verifyProject`, accept capacity, change `awaiting-rpc` to live, extend the deadline or enable sales.** Capacity/service commitment criteria, on-chain acceptance and buyer-facing launch API routing remain separate work. An old successful report is not continuous health monitoring.
+**A pass does not call `verifyProject`, accept capacity, change `awaiting-rpc` to live, extend the deadline or enable sales.** Capacity/service commitment criteria, on-chain acceptance and paid credit offering/consent remain separate steps. The paid test gateway is documented in [credit spending](CREDIT-SPENDING.md). An old successful report is not continuous health monitoring.
 
 ## Launch-card progress
 

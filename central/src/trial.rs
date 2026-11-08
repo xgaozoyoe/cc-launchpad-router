@@ -52,7 +52,11 @@ async fn snapshot(app: &App, user: &str) -> Result<Value, mongodb::error::Error>
         json!({"minute_remaining":(2-counts[0]).max(0),"day_remaining":(DAILY-counts[1]).max(0),"minute_reset_at":(at/60+1)*60,"day_reset_at":(at/86400+1)*86400}),
     )
 }
-async fn take_lease(app: &App, id: &str, run: &str) -> Result<(), (StatusCode, Json<Value>)> {
+pub(crate) async fn take_lease(
+    app: &App,
+    id: &str,
+    run: &str,
+) -> Result<(), (StatusCode, Json<Value>)> {
     let r = app
         .db
         .collection::<Document>("trial_leases")
@@ -72,7 +76,7 @@ async fn take_lease(app: &App, id: &str, run: &str) -> Result<(), (StatusCode, J
         Err(e) => Err(unavailable(e)),
     }
 }
-async fn release(app: &App, ids: &[String], run: &str) {
+pub(crate) async fn release(app: &App, ids: &[String], run: &str) {
     for id in ids {
         let _ = app
             .db
@@ -96,7 +100,12 @@ async fn reserve(app: &App, user: &str, project: &str) -> Result<(), (StatusCode
     }
     Ok(())
 }
-async fn generate(p: &Document, key: &str, prompt: &str) -> Result<Value, String> {
+pub(crate) async fn generate(
+    p: &Document,
+    key: &str,
+    prompt: &str,
+    max_output: u64,
+) -> Result<Value, String> {
     let port = std::env::var("RPC_CHECK_PORT")
         .unwrap_or_else(|_| "8080".into())
         .parse::<u16>()
@@ -113,7 +122,7 @@ async fn generate(p: &Document, key: &str, prompt: &str) -> Result<Value, String
         .timeout(Duration::from_secs(40))
         .build()
         .map_err(|_| "Trial client unavailable")?;
-    let mut r=client.post(format!("http://127.0.0.1:{port}/v1/chat/completions")).header("Host",host).bearer_auth(key).json(&json!({"model":"qwen3-8b-awq","messages":[{"role":"system","content":"You are a helpful assistant. Reply concisely."},{"role":"user","content":prompt}],"temperature":0.7,"max_tokens":OUTPUT,"stream":false,"chat_template_kwargs":{"enable_thinking":false}})).send().await.map_err(|_|"Provider did not respond to the trial")?;
+    let mut r=client.post(format!("http://127.0.0.1:{port}/v1/chat/completions")).header("Host",host).bearer_auth(key).json(&json!({"model":"qwen3-8b-awq","messages":[{"role":"system","content":"You are a helpful assistant. Reply concisely."},{"role":"user","content":prompt}],"temperature":0.7,"max_tokens":max_output,"stream":false,"chat_template_kwargs":{"enable_thinking":false}})).send().await.map_err(|_|"Provider did not respond to the trial")?;
     if !r.status().is_success() {
         return Err("Provider could not complete this trial".into());
     }
@@ -143,7 +152,7 @@ async fn generate(p: &Document, key: &str, prompt: &str) -> Result<Value, String
     let total = usage["total_tokens"]
         .as_u64()
         .ok_or("Missing token accounting")?;
-    if a == 0 || b == 0 || b > OUTPUT || a.checked_add(b) != Some(total) {
+    if a == 0 || b == 0 || b > max_output || a.checked_add(b) != Some(total) {
         return Err("Invalid trial token accounting".into());
     }
     let finish = v["choices"][0]["finish_reason"].as_str().unwrap_or("");
@@ -269,7 +278,7 @@ pub async fn handle(app: &App, user: &str, id: &str, method: &str, body: &[u8]) 
     let start = Instant::now();
     let result = match tokio::time::timeout(
         Duration::from_secs(45),
-        generate(&p, &key, input.prompt.trim()),
+        generate(&p, &key, input.prompt.trim(), OUTPUT),
     )
     .await
     {

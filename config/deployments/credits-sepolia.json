@@ -1,0 +1,13 @@
+{
+  "chain_id": 11155111,
+  "network": "sepolia",
+  "contract": "0x4c18665f28ac99745edda9b62cf3668ff0f62faf",
+  "staking_contract": "0xe5b29f59c9c90b7fbde165273a3464a35875c58c",
+  "settler": "0x58b44ce632fd53277d2bf3d6758026c033ed26fe",
+  "admin": "0x708adf851bf2da89a07da470b5882a5c99c51851",
+  "offer_manager": "0x22b47b6689b34d88b9d259029561692cfd589442",
+  "deployment_block": 12088342,
+  "transaction_hash": "0xd2ae37f06b54f987dfd066512f273d348a5c714e785e94ac1bc124cb5e2cf5c9",
+  "credit_unit": "output-token",
+  "prl_policy": "Existing stake stays locked"
+}

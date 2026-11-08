@@ -1,6 +1,8 @@
 mod admin;
 mod auth;
 mod catalog;
+mod credit_worker;
+mod credits;
 mod deployment;
 mod rpc_check;
 mod rpc_credentials;
@@ -48,7 +50,7 @@ async fn health(State(app): State<Arc<App>>) -> ApiResult {
         .await
         .map_err(unavailable)?;
     Ok(Json(
-        json!({"status":"ok","service":"cc-central","storage":"mongodb","sales_enabled":false}),
+        json!({"status":"ok","service":"cc-central","storage":"mongodb","credit_sales":"per-launch"}),
     ))
 }
 #[derive(Deserialize)]
@@ -140,6 +142,17 @@ async fn project_progress(app: &App, rows: &mut [Document]) -> Result<(), mongod
             }
         }
         p.insert("progress", progress);
+        let mut sales = false;
+        if p.get_str("status").ok() == Some("accepted")
+            && credits::config(app).is_ok()
+            && rpc_credentials::paid_key(p).is_ok()
+            && credits::ready(app, p).await.is_ok()
+        {
+            if let Ok(o) = credits::offer(app, p, "finalized").await {
+                sales = o.active && o.issued < o.supply;
+            }
+        }
+        p.insert("sales_enabled", sales);
     }
     Ok(())
 }
@@ -180,6 +193,9 @@ async fn dispatch(
     let owners = account_ids(&app, &identity.user)
         .await
         .map_err(unavailable)?;
+    if let Some(rest) = path.strip_prefix("/api/v1/credits/") {
+        return credits::handle(&app, &identity.user, rest, method.as_str(), &body).await;
+    }
     if let Some(rest) = path.strip_prefix("/api/v1/launchpad/") {
         if let Some(id) = rest.strip_suffix("/trial") {
             return trial::handle(&app, &identity.user, id, method.as_str(), &body).await;
@@ -287,8 +303,13 @@ async fn dispatch(
             } else {
                 json!({"configured":false})
             };
+            let sales = catalog::list(&app)
+                .await
+                .ok()
+                .and_then(|j| j.0["sales_enabled"].as_bool())
+                .unwrap_or(false);
             Ok(Json(
-                json!({"network":"sepolia","sales_enabled":false,"chain":chain,"wallet_verification":"project-bound EIP-191 signature","rpc_acceptance":"functional_checks_and_manual_onchain_verification"}),
+                json!({"network":"sepolia","sales_enabled":sales,"chain":chain,"wallet_verification":"project-bound EIP-191 signature","rpc_acceptance":"functional_checks_and_manual_onchain_verification"}),
             ))
         }
         ("GET", "/api/v1/launchpad") => catalog::list(&app).await,
@@ -376,7 +397,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if key.len() != 32 {
         return Err("HMAC key must contain 32 bytes encoded as hex".into());
     }
-    let client = Client::with_uri_str(std::env::var("MONGODB_URI")?).await?;
+    let mut options = mongodb::options::ClientOptions::parse(std::env::var("MONGODB_URI")?).await?;
+    options.write_concern = Some(
+        mongodb::options::WriteConcern::builder()
+            .w(mongodb::options::Acknowledgment::Majority)
+            .journal(true)
+            .build(),
+    );
+    let client = Client::with_options(options)?;
     let db = client.database(&std::env::var("MONGODB_DATABASE").unwrap_or("launchpad".into()));
     let hello = db.run_command(doc! {"hello":1}).await?;
     if !hello.contains_key("setName") && hello.get_str("msg").unwrap_or("") != "isdbgrid" {
@@ -391,6 +419,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
     db.collection::<Document>("request_nonces")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! {"expires_at":1})
+                .options(
+                    IndexOptions::builder()
+                        .expire_after(std::time::Duration::ZERO)
+                        .build(),
+                )
+                .build(),
+        )
+        .await?;
+    db.collection::<Document>("buyer_wallets")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! {"wallet":1})
+                .options(IndexOptions::builder().unique(true).build())
+                .build(),
+        )
+        .await?;
+    db.collection::<Document>("credit_results")
         .create_index(
             IndexModel::builder()
                 .keys(doc! {"expires_at":1})
@@ -433,6 +481,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stake = stake::Stake::load().await.map_err(std::io::Error::other)?;
     let app = Arc::new(App { db, key, stake });
     tokio::spawn(stake::run(app.clone()));
+    tokio::spawn(credit_worker::run(app.clone()));
     let routes = Router::new()
         .route("/healthz", get(health))
         .route(

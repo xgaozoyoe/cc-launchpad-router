@@ -15,6 +15,8 @@ struct Credential {
     key: String,
     #[serde(default)]
     trial_enabled: bool,
+    #[serde(default)]
+    paid_enabled: bool,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +25,7 @@ struct Input {
     #[serde(default)]
     revoke: bool,
     trial_enabled: Option<bool>,
+    paid_enabled: Option<bool>,
 }
 fn path(id: &str) -> Result<PathBuf, String> {
     if uuid::Uuid::parse_str(id).is_err() {
@@ -83,6 +86,13 @@ pub fn trial_key(p: &Document) -> Result<String, String> {
     Ok(s.key)
 }
 
+pub fn paid_key(p: &Document) -> Result<String, String> {
+    let s = read(p)?;
+    if !s.paid_enabled {
+        return Err("Provider has not enabled paid inference".into());
+    }
+    Ok(s.key)
+}
 pub async fn handle(
     app: &App,
     owners: Vec<String>,
@@ -99,7 +109,7 @@ pub async fn handle(
         .ok_or_else(|| error(StatusCode::NOT_FOUND, "Project not found"))?;
     if method == "GET" {
         return Ok(Json(
-            json!({"storage_available":configured(),"authorized":load(&p).is_ok(),"trial_enabled":trial_enabled(&p)}),
+            json!({"storage_available":configured(),"authorized":load(&p).is_ok(),"trial_enabled":trial_enabled(&p),"paid_enabled":paid_key(&p).is_ok()}),
         ));
     }
     if method != "POST" {
@@ -111,8 +121,14 @@ pub async fn handle(
             "Provide inference_api_key or revoke:true",
         )
     })?;
-    if input.revoke && (input.inference_api_key.is_some() || input.trial_enabled.is_some())
-        || !input.revoke && input.inference_api_key.is_none() && input.trial_enabled.is_none()
+    if input.revoke
+        && (input.inference_api_key.is_some()
+            || input.trial_enabled.is_some()
+            || input.paid_enabled.is_some())
+        || !input.revoke
+            && input.inference_api_key.is_none()
+            && input.trial_enabled.is_none()
+            && input.paid_enabled.is_none()
     {
         return Err(error(StatusCode::BAD_REQUEST, "Choose save or revoke"));
     }
@@ -129,12 +145,18 @@ pub async fn handle(
             }
         }
     } else {
-        if input.inference_api_key.is_some() || input.trial_enabled == Some(true) {
+        if input.inference_api_key.is_some()
+            || input.trial_enabled == Some(true)
+            || input.paid_enabled == Some(true)
+        {
             crate::deployment::eligible(app, &p)
                 .await
                 .map_err(|e| error(StatusCode::CONFLICT, &e))?;
         }
         let previous = read(&p).ok();
+        let paid = input
+            .paid_enabled
+            .unwrap_or(previous.as_ref().is_some_and(|s| s.paid_enabled));
         let enabled = input
             .trial_enabled
             .unwrap_or(previous.as_ref().is_some_and(|s| s.trial_enabled));
@@ -157,6 +179,7 @@ pub async fn handle(
             provider_id: p.get_str("provider_id").map_err(unavailable)?.into(),
             key,
             trial_enabled: enabled,
+            paid_enabled: paid,
         };
         let temp = file.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
         let write = (|| -> std::io::Result<()> {
@@ -177,8 +200,8 @@ pub async fn handle(
             ));
         }
     }
-    app.db.collection::<Document>("rpc_credential_events").insert_one(doc!{"project_id":id,"actor":owners.first(),"at":crate::now(),"operation":if input.revoke{"revoke"}else{"authorize"},"trial_enabled":trial_enabled(&p)}).await.map_err(unavailable)?;
+    app.db.collection::<Document>("rpc_credential_events").insert_one(doc!{"project_id":id,"actor":owners.first(),"at":crate::now(),"operation":if input.revoke{"revoke"}else{"authorize"},"trial_enabled":trial_enabled(&p),"paid_enabled":paid_key(&p).is_ok()}).await.map_err(unavailable)?;
     Ok(Json(
-        json!({"authorized":!input.revoke,"storage_available":true,"trial_enabled":trial_enabled(&p)}),
+        json!({"authorized":!input.revoke,"storage_available":true,"trial_enabled":trial_enabled(&p),"paid_enabled":paid_key(&p).is_ok()}),
     ))
 }
