@@ -1,0 +1,1 @@
+export function canScheduleMigration(status:{stage:string;deployment_verified:boolean}|null,pending:boolean,error:boolean):boolean{return status?.deployment_verified===true&&status.stage==='not_scheduled'&&!pending&&!error;}

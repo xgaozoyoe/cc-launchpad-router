@@ -438,7 +438,10 @@ def run():
     gate_code=json.loads((ROOT/'contracts/out/LegacyMigrationGate.sol/LegacyMigrationGate.json').read_text())['bytecode']['object']
     gate=send(admin,None,gate_code+encode(['address','address','address','bytes32'],[factory,escrow,credits,bytes.fromhex(project_key_for_test(third_id))]).hex())['contractAddress']
     candidate['id']='migration-runtime';candidate['migration_gate']=gate;candidate['migration_runtime_hash']='0x'+keccak(bytes.fromhex(rpc('eth_getCode',[gate,'latest'])[2:])).hex();candidate['monitor_enabled']=False
-    (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}));rpc('anvil_mine',['0x80'])
+    (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}))
+    blocked=api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime'})
+    assert blocked['stage']=='deployment_waiting_finality' and blocked['deployment_verified'] is False and 'migration_gate' in blocked['pending_components']
+    rpc('anvil_mine',['0x80'])
     def migration_status(extra=None,expected=200):return api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime',**(extra or {})},expected=expected)
     api('POST','/api/v1/admin/migration-status',{'token':'forged','group_id':'migration-runtime'},expected=403)
     assert migration_status()['stage']=='not_scheduled'

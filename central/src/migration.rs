@@ -815,6 +815,43 @@ pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult 
         .map_err(conflict)?,
     )
     .map_err(conflict)?;
+    // Scheduling must use the same finalized-deployment prerequisite as governance preparation.
+    let mut pending_components = Vec::new();
+    for (name, address) in g
+        .contracts
+        .iter()
+        .map(|(n, a)| (n.as_str(), a.as_str()))
+        .chain(std::iter::once(("migration_gate", gate)))
+    {
+        let code = rpc
+            .rpc("eth_getCode", json!([address, final_head["number"]]))
+            .await
+            .map_err(conflict)?;
+        if code
+            .as_str()
+            .is_none_or(|value| value == "0x" || value == "0x0")
+        {
+            pending_components.push(name.to_owned());
+        } else {
+            let bytes = hex::decode(code.as_str().unwrap_or("").trim_start_matches("0x"))
+                .map_err(|_| conflict("Invalid finalized deployment code"))?;
+            let expected = if name == "migration_gate" {
+                g.migration_runtime_hash.as_deref().unwrap_or("")
+            } else {
+                g.runtime_hashes.get(name).map(String::as_str).unwrap_or("")
+            };
+            if format!("0x{}", hex::encode(Keccak256::digest(bytes))) != expected {
+                return Err(conflict(format!(
+                    "Finalized deployment hash mismatch: {name}"
+                )));
+            }
+        }
+    }
+    if !pending_components.is_empty() {
+        return Ok(Json(
+            json!({"group_id":g.id,"stage":"deployment_waiting_finality","deployment_verified":false,"pending_components":pending_components,"delay_seconds":delay,"chain_time":chain_now,"ready_at":0,"remaining_seconds":0,"operation_id":"","finalized_block":finalized,"latest_block":head["number"],"transactions":[]}),
+        ));
+    }
     let configure = abi::data("configureMigration(address)", &[abi::addr(gate)]);
     let salt = format!(
         "0x{}",
@@ -993,6 +1030,6 @@ pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult 
         "ready_to_execute"
     };
     Ok(Json(
-        json!({"group_id":g.id,"stage":stage,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
+        json!({"group_id":g.id,"stage":stage,"deployment_verified":true,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
     ))
 }
