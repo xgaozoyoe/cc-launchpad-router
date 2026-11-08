@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {serverPost} from '../server-projects';
 import type {ServerProject} from '../server-projects';
+import {ensureWalletChain} from '../wallet-network';
 import {projectBadge} from '../launch-dashboard';
 type Wallet={request:(args:{method:string;params?:unknown[]})=>Promise<unknown>;on?:(event:string,fn:()=>void)=>void;removeListener?:(event:string,fn:()=>void)=>void};
 type ReviewProject=ServerProject&{capacity_approval?:{wallet:string;at:number;reason:string;type:string};rpc_retest_available?:boolean;verification_tx_hash?:string};
@@ -9,12 +10,20 @@ const provider=()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;i
 const messageHex=(message:string)=>'0x'+Array.from(new TextEncoder().encode(message),b=>b.toString(16).padStart(2,'0')).join('');
 export function AdminLaunches(){
  const [wallet,setWallet]=useState(''),[token,setToken]=useState(''),[listing,setListing]=useState<Listing|null>(null),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const epoch=useRef(0);
- useEffect(()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;const clear=()=>{epoch.current++;setWallet('');setToken('');setListing(null);setNotice('Wallet changed. Connect and sign again.');};p?.on?.('accountsChanged',clear);p?.on?.('chainChanged',clear);return()=>{epoch.current++;p?.removeListener?.('accountsChanged',clear);p?.removeListener?.('chainChanged',clear);};},[]);
+ const epoch=useRef(0),switchingNetwork=useRef(false);
+ useEffect(()=>{const p=(window as unknown as {ethereum?:Wallet}).ethereum;const clear=()=>{epoch.current++;setWallet('');setToken('');setListing(null);setNotice('Wallet changed. Connect and sign again.');};const chainChanged=()=>{if(!switchingNetwork.current)clear();};p?.on?.('accountsChanged',clear);p?.on?.('chainChanged',chainChanged);return()=>{epoch.current++;p?.removeListener?.('accountsChanged',clear);p?.removeListener?.('chainChanged',chainChanged);};},[]);
  async function signed<T>(intent:string,payload:unknown,address:string){
-  const started=epoch.current;
-  const challenge=await serverPost<{challenge_id:string;message:string;admin_address:string}>('admin/challenge',{intent,payload});
+  const beforeChallenge=epoch.current;
+  const challenge=await serverPost<{challenge_id:string;message:string;admin_address:string;chain_id:number}>('admin/challenge',{intent,payload});
   if(address.toLowerCase()!==challenge.admin_address.toLowerCase())throw new Error('The connected wallet is not the configured admin address: '+challenge.admin_address);
+  if(epoch.current!==beforeChallenge)throw new Error('Wallet changed. Connect again.');
+  if(intent==='login'){
+   switchingNetwork.current=true;
+   try{await ensureWalletChain(provider(),challenge.chain_id);}finally{switchingNetwork.current=false;}
+   const accounts=await provider().request({method:'eth_accounts'});
+   if(!Array.isArray(accounts)||typeof accounts[0]!=='string'||accounts[0].toLowerCase()!==address.toLowerCase()||epoch.current!==beforeChallenge)throw new Error('Wallet account changed. Connect again.');
+  }
+  const started=epoch.current;
   const signature=await provider().request({method:'personal_sign',params:[messageHex(challenge.message),address]});
   if(epoch.current!==started)throw new Error('Wallet changed. Reconnect before continuing.');
   const result=await serverPost<T>('admin/'+(intent==='login'?'authenticate':intent),{challenge_id:challenge.challenge_id,signature});
@@ -45,7 +54,7 @@ export function AdminLaunches(){
   try{await signed('submit',{project_id:project._id,tx_hash:tx},wallet);}catch(e){throw new Error('Transaction sent: '+tx+'. Tracking failed: '+(e instanceof Error?e.message:'retry refresh')+'. Refresh to reconcile chain state; do not send a second transaction.');}
   await refresh();
  }
- return <section className="admin-page"><div className="page-heading"><div><span className="eyebrow">PLATFORM ADMINISTRATION</span><h1>Launch review</h1><p>Approve a demo capacity exception, then sign on-chain acceptance with the authorized wallet.</p></div></div><div className="setup-note"><strong>Wallet authorization required</strong><p>The server verifies a fresh signature for every approval. Google sign-in alone grants no admin authority. Sales stay closed after acceptance.</p><button className="primary-button" disabled={!!busy} onClick={()=>void run('Connecting wallet',connect)}>{token?'Reconnect admin wallet':'Connect admin wallet & sign'}</button>{wallet?<p style={{overflowWrap:'anywhere'}}>Connected: {wallet}</p>:null}</div>{error?<p className="error" role="alert">{error}</p>:null}{notice?<p role="status" style={{overflowWrap:'anywhere'}}>{notice}</p>:null}{busy?<p role="status">{busy}…</p>:null}{listing?<><div className="provider-actions"><p>Chain {listing.chain_id} · Contract {listing.contract}</p><button className="outline-button" disabled={!!busy} onClick={()=>void run('Refreshing',()=>refresh())}>Refresh review status</button></div><p className="form-hint">Acceptance is finalized by the chain monitor. Refresh after Ethereum finality. A passing RPC check within the last hour is required before approval.</p>{listing.projects.map(project=><ReviewCard key={project._id} project={project} adminWallet={listing.admin_address} onRetest={()=>void run('Running signed RPC recheck',()=>retest(project))} busy={!!busy} onApprove={reason=>void run('Signing capacity approval',()=>approve(project,reason))} onVerify={()=>void run('Signing on-chain verification',()=>verify(project))}/>)}</>:null}</section>;
+ return <section className="admin-page"><div className="page-heading"><div><span className="eyebrow">PLATFORM ADMINISTRATION</span><h1>Launch review</h1><p>Approve a demo capacity exception, then sign on-chain acceptance with the authorized wallet.</p></div></div><div className="setup-note"><strong>Wallet authorization required</strong><p>The server verifies a fresh signature for every approval. Google sign-in alone grants no admin authority. Connecting requests the configured network automatically; confirm the switch in your wallet. Sales stay closed after acceptance.</p><button className="primary-button" disabled={!!busy} onClick={()=>void run('Connecting wallet',connect)}>{token?'Reconnect admin wallet':'Connect admin wallet & sign'}</button>{wallet?<p style={{overflowWrap:'anywhere'}}>Connected: {wallet}</p>:null}</div>{error?<p className="error" role="alert">{error}</p>:null}{notice?<p role="status" style={{overflowWrap:'anywhere'}}>{notice}</p>:null}{busy?<p role="status">{busy}…</p>:null}{listing?<><div className="provider-actions"><p>Chain {listing.chain_id} · Contract {listing.contract}</p><button className="outline-button" disabled={!!busy} onClick={()=>void run('Refreshing',()=>refresh())}>Refresh review status</button></div><p className="form-hint">Acceptance is finalized by the chain monitor. Refresh after Ethereum finality. A passing RPC check within the last hour is required before approval.</p>{listing.projects.map(project=><ReviewCard key={project._id} project={project} adminWallet={listing.admin_address} onRetest={()=>void run('Running signed RPC recheck',()=>retest(project))} busy={!!busy} onApprove={reason=>void run('Signing capacity approval',()=>approve(project,reason))} onVerify={()=>void run('Signing on-chain verification',()=>verify(project))}/>)}</>:null}</section>;
 }
 function ReviewCard({project,adminWallet,busy,onApprove,onVerify,onRetest}:{project:ReviewProject;adminWallet:string;busy:boolean;onApprove:(reason:string)=>void;onVerify:()=>void;onRetest:()=>void}){
  const [reason,setReason]=useState(''),[confirmed,setConfirmed]=useState(false);

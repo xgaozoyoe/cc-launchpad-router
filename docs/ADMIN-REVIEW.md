@@ -1,6 +1,6 @@
 # Wallet-authorized launch review
 
-Open `/#admin` after Google sign-in. Connect an Ethereum browser wallet and sign the login challenge. Only the configured `ADMIN_WALLET_ADDRESS` can access project reviews. Google identity is used for account binding and audit; email alone grants no admin authority. EOA wallets are supported; EIP-1271 contract wallets are not supported.
+Open `/#admin` after Google sign-in. Connect an Ethereum browser wallet. The app requests the chain configured in the backend challenge before asking for the login signature; confirm the switch in your wallet. If Sepolia is not installed, the app offers to add it and checks the resulting chain. Cancellation or a wallet remaining on the wrong chain stops login. Network changes initiated outside this connection flow still clear the admin session. Then sign the login challenge. Only the configured `ADMIN_WALLET_ADDRESS` can access project reviews. Google identity is used for account binding and audit; email alone grants no admin authority. EOA wallets are supported; EIP-1271 contract wallets are not supported.
 
 ## Review and verify
 
