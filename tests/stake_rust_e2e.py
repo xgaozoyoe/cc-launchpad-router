@@ -442,7 +442,7 @@ def run():
     blocked=api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime'})
     assert blocked['stage']=='deployment_waiting_finality' and blocked['deployment_verified'] is False and 'migration_gate' in blocked['pending_components']
     rpc('anvil_mine',['0x80'])
-    def migration_status(extra=None,expected=200):return api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime',**(extra or {})},expected=expected)
+    def migration_status(extra=None,expected=200):return api('POST','/api/v1/admin/migration-status',{'token':session['token'],'group_id':'migration-runtime','project_id':third_id,**(extra or {})},expected=expected)
     api('POST','/api/v1/admin/migration-status',{'token':'forged','group_id':'migration-runtime'},expected=403)
     assert migration_status()['stage']=='not_scheduled'
     api('POST','/api/v1/admin/challenge',{'intent':'migration-governance','payload':{'project_id':pid,'group_id':'migration-runtime','step':'schedule'}},expected=403)
@@ -463,13 +463,17 @@ def run():
     rpc('anvil_mine',['0x80'])
     progress=migration_status();assert progress['stage']=='gate_bound_finalized' and all(t['status']=='finalized' for t in progress['transactions'])
     for contract,role_name in [(escrow,'SETTLER_ROLE'),(credits,'SETTLER_ROLE'),(credits,'OFFER_MANAGER_ROLE')]:send(admin,contract,'0x'+selector('grantRole(bytes32,address)')+keccak(text=role_name).hex()+addr(gate))
+    assert migration_status()['monitor_ready'] is False
+    admin_sign('migration-freeze',{'project_id':third_id,'group_id':'migration-runtime'},expected=409)
     new_vault=contracts['stake_vault'];send(provider.address,token,'0x'+selector('approve(address,uint256)')+addr(new_vault)+word(2000*10**18));send(provider.address,gate,'0x'+selector('fund()'),997*10**9)
     candidate['monitor_enabled']=True
     (tmp/'protocol-groups.json').write_text(json.dumps({'schema_version':1,'candidates':[candidate]}));rpc('anvil_mine',['0x80'])
+    wait(lambda:migration_status()['monitor_ready'],150)
     frozen,_=admin_sign('migration-freeze',{'project_id':third_id,'group_id':'migration-runtime'});assert frozen['phase']=='frozen'
     api('POST',credit_path+'/infer',{**request,'request_id':str(uuid.uuid4())},user='paid-buyer',expected=409)
     plan_result,_=admin_sign('migration-plan',{'project_id':third_id,'group_id':'migration-runtime','holders':buyer.address})
     consent=api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='paid-buyer')
+    readiness=migration_status()['asset_progress'];assert readiness['funding_ready'] is True and readiness['plan_ready'] is False and readiness['signed_signatures']==0
     assert consent['remaining_credits']=='997' and consent['historical_consumed']=='3' and not consent['signed']
     api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='bob',expected=409)
     digest=rpc('eth_call',[{'to':gate,'data':'0x'+selector('consentDigest(bytes32,uint64)')+encode(['bytes32','uint64'],[bytes.fromhex(consent['plan_hash'][2:]),consent['chain_expiry']]).hex()},'latest'])
@@ -477,6 +481,7 @@ def run():
     api('POST','/api/v1/modular/'+third_id+'/consent',{'plan_hash':consent['plan_hash'],'signature':'0x'+wrong_signature.removeprefix('0x')},user='paid-buyer',expected=403)
     signature=Account._sign_hash(bytes.fromhex(digest[2:]),buyer.key).signature.hex()
     api('POST','/api/v1/modular/'+third_id+'/consent',{'plan_hash':consent['plan_hash'],'signature':'0x'+signature.removeprefix('0x')},user='paid-buyer')
+    assert migration_status()['asset_progress']['plan_ready'] is True
     assert api('GET','/api/v1/modular/'+third_id+'/consent-plan',user='paid-buyer')['signed'] is True
     prepared_migration,_=admin_sign('migration-prepare',{'project_id':third_id,'group_id':'migration-runtime'})
     assert prepared_migration['simulation']=='passed' and prepared_migration['transaction']['to']==gate.lower()

@@ -60,6 +60,40 @@ pub async fn admin(
         return Err(conflict("Legacy credit source mismatch"));
     }
     if operation == "migration-freeze" {
+        let head = app
+            .stake
+            .as_ref()
+            .ok_or_else(|| conflict("Chain unavailable"))?
+            .rpc("eth_getBlockByNumber", json!(["finalized", false]))
+            .await
+            .map_err(conflict)?;
+        let height = u64::from_str_radix(
+            head["number"]
+                .as_str()
+                .unwrap_or("")
+                .trim_start_matches("0x"),
+            16,
+        )
+        .map_err(|_| conflict("Invalid finalized head"))?;
+        let monitor = app
+            .db
+            .collection::<Document>("protocol_group_state")
+            .find_one(doc! {"_id":&g.id})
+            .await
+            .map_err(unavailable)?;
+        if !g.monitor_enabled
+            || !monitor.as_ref().is_some_and(|row| {
+                row.get_bool("halted").ok() == Some(false)
+                    && row.get_str("manifest_digest").ok() == Some(g.digest().as_str())
+                    && row
+                        .get_i64("block")
+                        .ok()
+                        .is_some_and(|b| b >= height as i64)
+            })
+        {
+            return Err(conflict("Platform preparation required: enable and synchronize the target monitor before freezing service"));
+        }
+
         if p.get_str("migration_phase").ok() == Some("frozen")
             && p.get_str("migration_target_group").ok() != Some(group_id)
         {
@@ -1016,6 +1050,128 @@ pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult 
             json!({"tx_hash":hash,"kind":row.get_str("kind").ok(),"status":state,"block":block}),
         );
     }
+    let monitor = app
+        .db
+        .collection::<Document>("protocol_group_state")
+        .find_one(doc! {"_id":&g.id})
+        .await
+        .map_err(unavailable)?;
+    let monitor_ready = g.monitor_enabled
+        && monitor.as_ref().is_some_and(|row| {
+            row.get_bool("halted").ok() == Some(false)
+                && row.get_str("manifest_digest").ok() == Some(g.digest().as_str())
+                && row
+                    .get_i64("block")
+                    .ok()
+                    .is_some_and(|b| b >= finalized as i64)
+        });
+    let mut asset_progress = json!({"plan_ready":false,"funding_ready":false,"required_signatures":0,"signed_signatures":0,"commit_state":"not_submitted"});
+    if let Some(pid) = input["project_id"].as_str() {
+        if !project_matches(
+            pid,
+            &call(app, gate, "projectId()", &[], "latest")
+                .await
+                .map_err(conflict)?,
+        ) {
+            return Err(conflict(
+                "Selected asset record does not match this deployment gate",
+            ));
+        }
+        let committed = abi::uint(
+            &call(app, gate, "committed()", &[], "latest")
+                .await
+                .map_err(conflict)?,
+        )
+        .map_err(conflict)?
+            == 1;
+        if committed {
+            let final_commit = call(app, gate, "committed()", &[], "finalized")
+                .await
+                .ok()
+                .and_then(|s| abi::uint(&s).ok())
+                == Some(1);
+            asset_progress["commit_state"] = json!(if final_commit {
+                "finalized"
+            } else {
+                "mined_waiting_finality"
+            });
+        } else if let Some(plan) = app
+            .db
+            .collection::<Document>("migration_plans")
+            .find_one(doc! {"project_id":pid,"group_id":&g.id,"active":true})
+            .sort(doc! {"at":-1})
+            .await
+            .map_err(unavailable)?
+        {
+            let hash = plan.get_str("_id").map_err(unavailable)?;
+            let expiry = plan.get_i64("chain_expiry").unwrap_or(0);
+            let holders = plan.get_array("holders").map_err(unavailable)?;
+            let mut signed = 0;
+            for holder in holders.iter().filter_map(|v| v.as_str()) {
+                if app
+                    .db
+                    .collection::<Document>("migration_consents")
+                    .find_one(doc! {"_id":format!("{hash}:{expiry}:{holder}")})
+                    .await
+                    .map_err(unavailable)?
+                    .is_some()
+                {
+                    signed += 1;
+                }
+            }
+            let valid =
+                plan.get_i64("expires_at").unwrap_or(0) > now() && expiry > chain_now as i64;
+            asset_progress = json!({"plan_ready":valid&&signed==holders.len(),"plan_expires_at":expiry,"required_signatures":holders.len(),"signed_signatures":signed,"funding_ready":false,"commit_state":"not_submitted"});
+            if valid {
+                let preview=rpc.rpc("eth_call",json!([{"to":gate,"data":plan.get_str("preview_calldata").map_err(unavailable)?},"latest"])).await;
+                if let Ok(raw) = preview {
+                    if let Some(raw) = raw.as_str() {
+                        if abi::w(raw, 0)
+                            .ok()
+                            .is_some_and(|v| format!("0x{v}") == hash)
+                        {
+                            let reserve =
+                                abi::uint(abi::w(raw, 3).map_err(conflict)?).map_err(conflict)?;
+                            let prefund = abi::uint(
+                                &call(app, gate, "prefunded()", &[], "latest")
+                                    .await
+                                    .map_err(conflict)?,
+                            )
+                            .map_err(conflict)?;
+                            let provider = call(app, gate, "provider()", &[], "latest")
+                                .await
+                                .map_err(conflict)?;
+                            let provider =
+                                format!("0x{}", &abi::w(&provider, 0).map_err(conflict)?[24..]);
+                            let principal = rpc
+                                .state(&stake::project_key(pid), "latest")
+                                .await
+                                .map_err(conflict)?
+                                .1;
+                            let allowance = call(
+                                app,
+                                &g.prl_token,
+                                "allowance(address,address)",
+                                &[abi::addr(&provider), abi::addr(&g.contracts["stake_vault"])],
+                                "latest",
+                            )
+                            .await
+                            .map_err(conflict)?;
+                            asset_progress["funding_ready"] = json!(
+                                prefund == reserve
+                                    && abi::uint(&allowance).map_err(conflict)? == principal
+                            );
+                            asset_progress["required_reserve_wei"] = json!(reserve.to_string());
+                            asset_progress["required_prl_wei"] = json!(principal.to_string());
+                            asset_progress["provider"] = json!(provider);
+                            asset_progress["stake_vault"] = json!(g.contracts["stake_vault"]);
+                            asset_progress["funding_gate"] = json!(gate);
+                        }
+                    }
+                }
+            }
+        }
+    }
     let stage = if final_bound {
         "gate_bound_finalized"
     } else if latest_bound {
@@ -1030,7 +1186,7 @@ pub(crate) async fn status(app: &App, wallet: &str, input: &Value) -> ApiResult 
         "ready_to_execute"
     };
     Ok(Json(
-        json!({"group_id":g.id,"stage":stage,"deployment_verified":true,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
+        json!({"group_id":g.id,"stage":stage,"deployment_verified":true,"monitor_enabled":g.monitor_enabled,"monitor_ready":monitor_ready,"asset_progress":asset_progress,"delay_seconds":delay,"chain_time":chain_now,"ready_at":ready_at,"remaining_seconds":ready_at.saturating_sub(chain_now as u128),"operation_id":op,"finalized_block":finalized,"latest_block":head["number"],"transactions":transactions}),
     ))
 }
 

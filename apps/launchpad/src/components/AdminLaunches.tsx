@@ -69,7 +69,7 @@ export function AdminLaunches({accountId='current-account'}:{accountId?:string})
   const result=await serverPost<T>('admin/'+(intent==='login'?'authenticate':intent),{challenge_id:challenge.challenge_id,signature});
   if(epoch.current!==started)throw new Error('Wallet changed. Reconnect before continuing.');return result;
  }
- const migrationStatus=useCallback((group:string,hash?:string)=>serverPost<MigrationStatus>('admin/migration-status',{token,group_id:group,...(hash?{tx_hash:hash}:{})}),[token]);
+ const migrationStatus=useCallback((group:string,hash?:string,projectId?:string)=>serverPost<MigrationStatus>('admin/migration-status',{token,group_id:group,...(projectId?{project_id:projectId}:{}),...(hash?{tx_hash:hash}:{})}),[token]);
  async function refresh(access=token){const started=epoch.current;const data=await serverPost<Listing>('admin/query',{token:access});if(epoch.current===started)setListing(data);}
  async function run(label:string,fn:()=>Promise<void>){setBusy(label);setError('');setNotice('');try{await fn();}catch(e){setError(e instanceof Error?e.message:'Request failed');}finally{setBusy('');}}
  async function connect(){
