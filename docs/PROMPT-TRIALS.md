@@ -13,7 +13,7 @@ Owner-only `POST /api/v1/projects/<id>/deployment/rpc-credential` accepts `{tria
 | Limit | Policy |
 |---|---|
 | Account frequency | 2 attempts per UTC minute window, across all projects |
-| Account daily quota | 10 attempts per UTC day, across all projects |
+| Account daily quota | 100 attempts per UTC day, across all projects |
 | Shared project frequency | 30 attempts per UTC hour |
 | Shared project daily quota | 200 attempts per UTC day |
 | Concurrency | 1 trial per account and 1 per project |

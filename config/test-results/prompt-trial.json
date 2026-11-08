@@ -27,5 +27,6 @@
     "max_output_tokens": 128
   },
   "integration_test": "Passed: consent separation/revocation, input bounds, duplicate prevention, account limits and shared project concurrency",
-  "sales_enabled": false
+  "sales_enabled": false,
+  "policy_note": "Historical initial smoke test used 10 per day. Current account quota is 100 per day; minute and project caps remain unchanged."
 }

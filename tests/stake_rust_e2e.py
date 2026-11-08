@@ -268,25 +268,25 @@ def run():
    api('GET',trial_path,user='buyer',expected=409) # recheck custody does not imply public trial consent
    api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':True},user='buyer',expected=404)
    assert api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':True})['trial_enabled'] is True
-   info=api('GET',trial_path,user='buyer');assert info['quota']['day_remaining']==10
+   info=api('GET',trial_path,user='buyer');assert info['quota']['day_remaining']==100
    trial=lambda prompt:{'prompt':prompt,'request_id':str(uuid.uuid4())}
    api('POST',trial_path,{**trial('hello'),'max_tokens':100000},user='buyer',expected=400)
    api('POST',trial_path,trial('x'*501),user='buyer',expected=400)
    api('POST','/api/v1/launchpad/'+pid+'/trial',trial('hello'),user='buyer',expected=409) # refunded launch
    first=trial('A short greeting please')
-   answer=api('POST',trial_path,first,user='buyer');assert answer['text']=='hello' and answer['quota']['day_remaining']==9
+   answer=api('POST',trial_path,first,user='buyer');assert answer['text']=='hello' and answer['quota']['day_remaining']==99
    assert 'test-inference-secret' not in str(answer)
    api('POST',trial_path,first,user='buyer',expected=409) # no duplicate generation or extra quota
-   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==9
+   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==99
    api('POST',trial_path,trial('Another greeting'),user='buyer')
    limited=api('POST',trial_path,trial('Third greeting'),user='buyer',expected=429);assert limited['retry_after_seconds']>0
-   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==8
+   assert api('GET',trial_path,user='buyer')['quota']['day_remaining']==98
    # A separate authenticated buyer has an independent account allowance.
-   assert api('POST',trial_path,trial('Independent buyer'),user='second-buyer')['quota']['day_remaining']==9
+   assert api('POST',trial_path,trial('Independent buyer'),user='second-buyer')['quota']['day_remaining']==99
    slow=[]
    thread=threading.Thread(target=lambda:slow.append(api('POST',trial_path,trial('slow-trial'),user='concurrent-one')));thread.start();assert trial_started.wait(5)
    api('POST',trial_path,trial('Another simultaneous trial'),user='concurrent-two',expected=429)
-   assert api('GET',trial_path,user='concurrent-two')['quota']['day_remaining']==10
+   assert api('GET',trial_path,user='concurrent-two')['quota']['day_remaining']==100
    thread.join(timeout=10);assert slow[0]['text']=='hello'
    api('POST',third_path+'/deployment/rpc-credential',{'trial_enabled':False})
    api('POST',trial_path,trial('After revocation'),user='second-buyer',expected=409)

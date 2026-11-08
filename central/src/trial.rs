@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 const OUTPUT: u64 = 128;
+const DAILY: i64 = 100;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Input {
@@ -14,7 +15,7 @@ struct Input {
     request_id: String,
 }
 fn limits() -> Value {
-    json!({"per_minute":2,"per_day":10,"project_per_hour":30,"project_per_day":200,"project_concurrency":1,"max_prompt_chars":500,"max_output_tokens":OUTPUT,"timeout_seconds":45})
+    json!({"per_minute":2,"per_day":DAILY,"project_per_hour":30,"project_per_day":200,"project_concurrency":1,"max_prompt_chars":500,"max_output_tokens":OUTPUT,"timeout_seconds":45})
 }
 fn reject(status: StatusCode, message: &str, retry: i64) -> (StatusCode, Json<Value>) {
     (
@@ -48,7 +49,7 @@ async fn snapshot(app: &App, user: &str) -> Result<Value, mongodb::error::Error>
         );
     }
     Ok(
-        json!({"minute_remaining":(2-counts[0]).max(0),"day_remaining":(10-counts[1]).max(0),"minute_reset_at":(at/60+1)*60,"day_reset_at":(at/86400+1)*86400}),
+        json!({"minute_remaining":(2-counts[0]).max(0),"day_remaining":(DAILY-counts[1]).max(0),"minute_reset_at":(at/60+1)*60,"day_reset_at":(at/86400+1)*86400}),
     )
 }
 async fn take_lease(app: &App, id: &str, run: &str) -> Result<(), (StatusCode, Json<Value>)> {
@@ -85,7 +86,7 @@ async fn reserve(app: &App, user: &str, project: &str) -> Result<(), (StatusCode
     let u = subject(user);
     for (prefix, window, max) in [
         (format!("user:{u}:minute"), 60, 2),
-        (format!("user:{u}:day"), 86400, 10),
+        (format!("user:{u}:day"), 86400, DAILY),
         (format!("project:{project}:hour"), 3600, 30),
         (format!("project:{project}:day"), 86400, 200),
     ] {
