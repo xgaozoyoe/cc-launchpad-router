@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-08",
+  "application_revision": "6b7ae0f43ea597f9b96c84b813ef17d1931d1775",
+  "frontend_gateway_tests_passed": 59,
+  "production_build": "passed",
+  "browser_fixture_verified": [
+    "distinct migration and waiting-for-approval categories",
+    "only fresh RPC-passed launch appears in queue",
+    "failed RPC launch has blocker and no approval form",
+    "pending and accepted sections have no new approval form"
+  ],
+  "backend_capacity_guard": "existing ready() still checks matching provider, passing RPC, one-hour freshness, chain state and deployment eligibility",
+  "live_health": 200,
+  "production_category_bundle": "verified",
+  "backend_binary_and_configuration_fingerprints": "unchanged",
+  "service_restart": false,
+  "live_asset_transactions": false
+}
