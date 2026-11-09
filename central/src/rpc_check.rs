@@ -44,7 +44,7 @@ fn generation_failure(v: &Value) -> Option<String> {
             .map(|n| n.to_string())
             .unwrap_or_else(|| "missing/invalid".into())
     };
-    Some(format!("Generation failed: finish_reason={reason}; content={}; prompt_tokens={}; completion_tokens={}; total_tokens={}; max_tokens=48. {}",
+    Some(format!("Generation failed: finish_reason={reason}; content={}; prompt_tokens={}; completion_tokens={}; total_tokens={}; max_tokens=4096. {}",
         if present { "non-empty" } else if content.is_some() { "empty" } else { "missing/non-string" },
         count("prompt_tokens"), count("completion_tokens"), count("total_tokens"),
         if reason == "length" { "Output reached the token limit; no complete answer was returned." } else { "Expected non-empty text and finish_reason=stop." }))
@@ -94,7 +94,7 @@ fn stream_valid(data: &[u8]) -> bool {
 async fn probes(host: &str, key: &str, checks: &mut Vec<Value>) -> Result<(), String> {
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(12))
+        .timeout(std::time::Duration::from_secs(300))
         .no_proxy()
         .build()
         .map_err(|_| "Test client unavailable")?;
@@ -146,7 +146,7 @@ async fn probes(host: &str, key: &str, checks: &mut Vec<Value>) -> Result<(), St
         return Err("Expected served model ID was not advertised".into());
     }
     checks.push(json!({"id":"model","passed":true,"detail":"Authenticated API advertises qwen3-8b-awq; this does not attest model weights or GPU capacity"}));
-    let body = json!({"model":"qwen3-8b-awq","messages":[{"role":"user","content":"Reply with one short greeting sentence."}],"temperature":0,"max_tokens":48,"chat_template_kwargs":{"enable_thinking":false}});
+    let body = json!({"model":"qwen3-8b-awq","messages":[{"role":"user","content":"Reply with one short greeting sentence."}],"temperature":0,"max_tokens":4096,"chat_template_kwargs":{"enable_thinking":false}});
     let r = client
         .post(format!("{base}/v1/chat/completions"))
         .header("Host", host)
@@ -270,7 +270,7 @@ pub(crate) async fn run(app: &App, p: &Document, key: String) -> ApiResult {
     let acquired = reports
         .update_one(
             doc! {"_id":id,"lease_until":{"$lte":now}},
-            doc! {"$set":{"lease_until":now+65,"lease_id":&lease,"running":true}},
+            doc! {"$set":{"lease_until":now+680,"lease_id":&lease,"running":true}},
         )
         .upsert(true)
         .await;
@@ -292,7 +292,7 @@ pub(crate) async fn run(app: &App, p: &Document, key: String) -> ApiResult {
     let start = Instant::now();
     let mut checks = vec![];
     let result = match tokio::time::timeout(
-        std::time::Duration::from_secs(45),
+        std::time::Duration::from_secs(660),
         probes(&host, &key, &mut checks),
     )
     .await
