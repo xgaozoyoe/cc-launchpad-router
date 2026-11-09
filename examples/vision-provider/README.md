@@ -23,3 +23,7 @@ The API listens on localhost only. `run.sh` creates an API credential in `.env` 
 The client sends an OpenAI-compatible `messages` array with `image_url` (inline base64 data) and `text` content parts to `/v1/chat/completions`. A text-only Qwen3 launch cannot accept this request. Platform image uploads, vision launch registration and image token pricing must be explicitly supported before selling this model's credits.
 
 Official model: https://huggingface.co/Qwen/Qwen2.5-VL-3B-Instruct
+
+## Smoke-test findings (2026-11-09)
+
+The deployed demo rejected missing/incorrect keys and correctly identified a generated blue image. Actual usage was 101 input tokens and 2 output tokens. The same multimodal messages sent to `/tokenize` reported only 38 tokens: this tokenizer endpoint does **not** provide a reliable image-inclusive context count in this configuration. Do not reuse the platform's text-only paid context preflight for this model. Vision launch/UI integration remains pending an image-aware context check and explicit limits; this demo is not listed for credit purchasing.
