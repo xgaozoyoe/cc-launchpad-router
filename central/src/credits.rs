@@ -417,7 +417,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
                 "This account is already bound to another buyer wallet",
             ));
         }
-        return Ok(Json(json!({"wallet":wal})));
+        return Ok(Json(json!({ "wallet": wal })));
     }
     let (id, action) = path.split_once('/').unwrap_or((path, ""));
     if uuid::Uuid::parse_str(id).is_err() {
@@ -561,13 +561,13 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             )
         })?;
         if input.prompt.trim().is_empty()
-            || input.prompt.chars().count() > 500
-            || !(16..=256).contains(&input.max_output_tokens)
+            || input.prompt.len() > 65536
+            || !(16..=4096).contains(&input.max_output_tokens)
             || uuid::Uuid::parse_str(&input.request_id).is_err()
         {
             return Err(error(
                 StatusCode::BAD_REQUEST,
-                "Use at most 500 prompt characters and 16–256 output tokens",
+                "Use at most 65536 prompt bytes (8192 total context tokens) and 16–4096 output tokens",
             ));
         }
         let rid = hex::encode(Sha256::digest(
@@ -597,9 +597,9 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             ));
         }
         let lease_id = format!("paid:{wal}:{id}");
-        crate::trial::take_lease(app, &lease_id, &rid).await?;
+        crate::trial::take_lease_seconds(app, &lease_id, &rid, 720).await?;
         let leases = vec![lease_id, format!("project:{id}")];
-        if let Err(e) = crate::trial::take_lease(app, &leases[1], &rid).await {
+        if let Err(e) = crate::trial::take_lease_seconds(app, &leases[1], &rid, 720).await {
             crate::trial::release(app, &leases, &rid).await;
             return Err(e);
         }
@@ -620,7 +620,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
                 ));
             }
         }
-        let attempt = tokio::time::timeout(std::time::Duration::from_secs(80), async {
+        let attempt = tokio::time::timeout(std::time::Duration::from_secs(660), async {
             let a = account(app, &c, id, &wal, "finalized").await.map_err(|e| error(StatusCode::SERVICE_UNAVAILABLE, &e))?;
             let latest = account(app, &c, id, &wal, "latest").await.map_err(|e| error(StatusCode::SERVICE_UNAVAILABLE, &e))?;
             let (r, u) = pending(app, id, &wal).await.map_err(unavailable)?;
@@ -628,7 +628,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
                 return Err(error(StatusCode::CONFLICT, "Insufficient finalized available credits or a withdrawal is pending"));
             }
             requests.insert_one(doc! {"_id":&rid,"project_id":id,"wallet":&wal,"contract":&c.contract,"at":now(),"status":"inflight","amount":input.max_output_tokens as i64}).await.map_err(unavailable)?;
-            let output = tokio::time::timeout(std::time::Duration::from_secs(45), crate::trial::generate(&p, &api_key, &input.prompt, input.max_output_tokens)).await.unwrap_or_else(|_|Err("Provider timed out; no paid credits consumed".into()));
+            let output = tokio::time::timeout(std::time::Duration::from_secs(620), crate::trial::generate_paid(&p, &api_key, &input.prompt, input.max_output_tokens)).await.unwrap_or_else(|_|Err("Provider timed out; no paid credits consumed".into()));
             match output {
                 Err(e) => {
                     requests.update_one(doc! {"_id":&rid,"status":"inflight"}, doc! {"$set":{"status":"failed","amount":0}}).await.map_err(unavailable)?;

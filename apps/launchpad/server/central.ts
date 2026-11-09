@@ -29,7 +29,7 @@ export async function centralProxy(request:Request,env:CentralEnvironment,fetche
  const envelope=[request.method,path,user,stamp,nonce,createHash('sha256').update(body).digest('hex')].join('\n');
  const signature=createHmac('sha256',Buffer.from(env.CENTRAL_HMAC_KEY!,'hex')).update(envelope).digest('hex');
  try{
-  const upstream=await fetcher(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','X-CC-User':user,'X-CC-Timestamp':stamp,'X-CC-Nonce':nonce,'X-CC-Signature':signature},body:request.method==='POST'?body:undefined,redirect:'error',signal:AbortSignal.timeout(path.includes('rpc-check')||path.includes('rpc-retest')?720000:60000)});
+  const upstream=await fetcher(new URL(path,base),{method:request.method,headers:{'Content-Type':'application/json','X-CC-User':user,'X-CC-Timestamp':stamp,'X-CC-Nonce':nonce,'X-CC-Signature':signature},body:request.method==='POST'?body:undefined,redirect:'error',signal:AbortSignal.timeout(path.includes('rpc-check')||path.includes('rpc-retest')||path.endsWith('/infer')?720000:60000)});
   if(match[1].endsWith('/deployment/bundle')&&upstream.ok){
    const payload=await upstream.json() as {filename?:string;bundle_base64?:string};
    if(!/^provider-launch-[a-f0-9-]{36}-linux-amd64\.tar\.gz$/.test(payload.filename??'')||typeof payload.bundle_base64!=='string'||payload.bundle_base64.length>40000000)return json({error:'Invalid bundle response.'},502);

@@ -57,12 +57,15 @@ pub(crate) async fn take_lease(
     id: &str,
     run: &str,
 ) -> Result<(), (StatusCode, Json<Value>)> {
+    take_lease_seconds(app, id, run, 90).await
+}
+pub(crate) async fn take_lease_seconds(app: &App, id: &str, run: &str, seconds: i64) -> Result<(), (StatusCode, Json<Value>)> {
     let r = app
         .db
         .collection::<Document>("trial_leases")
         .update_one(
             doc! {"_id":id,"until":{"$lte":now()}},
-            doc! {"$set":{"until":now()+90,"run":run}},
+            doc! {"$set":{"until":now()+seconds,"run":run}},
         )
         .upsert(true)
         .await;
@@ -100,12 +103,25 @@ async fn reserve(app: &App, user: &str, project: &str) -> Result<(), (StatusCode
     }
     Ok(())
 }
+fn validate_paid_context(count: u64, output: u64, provider_limit: u64) -> Result<(), String> {
+    let limit = provider_limit.min(8192);
+    if count == 0 || !(16..=4096).contains(&output) || count.checked_add(output).filter(|total| *total <= limit).is_none() {
+        return Err(format!("Context limit exceeded: {count} input tokens + {output} requested output tokens; effective limit {limit} (launch limit 8192). Shorten the prompt or reduce maximum output."));
+    }
+    Ok(())
+}
 pub(crate) async fn generate(
     p: &Document,
     key: &str,
     prompt: &str,
     max_output: u64,
 ) -> Result<Value, String> {
+    generate_inner(p, key, prompt, max_output, false).await
+}
+pub(crate) async fn generate_paid(p: &Document, key: &str, prompt: &str, max_output: u64) -> Result<Value, String> {
+    generate_inner(p, key, prompt, max_output, true).await
+}
+async fn generate_inner(p: &Document, key: &str, prompt: &str, max_output: u64, paid: bool) -> Result<Value, String> {
     let port = std::env::var("RPC_CHECK_PORT")
         .unwrap_or_else(|_| "8080".into())
         .parse::<u16>()
@@ -119,10 +135,29 @@ pub(crate) async fn generate(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
-        .timeout(Duration::from_secs(40))
+        .timeout(Duration::from_secs(if paid {300} else {40}))
         .build()
         .map_err(|_| "Trial client unavailable")?;
-    let mut r=client.post(format!("http://127.0.0.1:{port}/v1/chat/completions")).header("Host",host).bearer_auth(key).json(&json!({"model":"qwen3-8b-awq","messages":[{"role":"system","content":"You are a helpful assistant. Reply concisely."},{"role":"user","content":prompt}],"temperature":0.7,"max_tokens":max_output,"stream":false,"chat_template_kwargs":{"enable_thinking":false}})).send().await.map_err(|_|"Provider did not respond to the trial")?;
+    let messages = json!([{"role":"system","content":"You are a helpful assistant. Reply concisely."},{"role":"user","content":prompt}]);
+    if paid {
+        if p.get_str("model_id").ok() != Some("qwen3-8b-awq") || !(16..=4096).contains(&max_output) {
+            return Err("Unsupported paid serving profile or output limit".into());
+        }
+        let response = client.post(format!("http://127.0.0.1:{port}/tokenize")).header("Host", &host).bearer_auth(key)
+            .json(&json!({"model":"qwen3-8b-awq","messages":messages,"add_generation_prompt":true,"chat_template_kwargs":{"enable_thinking":false}}))
+            .send().await.map_err(|_|"Could not validate context with provider tokenizer; no generation started")?;
+        if !response.status().is_success() { return Err(format!("Provider tokenizer returned HTTP {}; cannot validate 8K context", response.status().as_u16())); }
+        let mut response = response;
+        let mut token_bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_|"Tokenizer response interrupted")? {
+            if token_bytes.len() + chunk.len() > 524288 { return Err("Tokenizer response too large".into()); }
+            token_bytes.extend_from_slice(&chunk);
+        }
+        let tokens: Value = serde_json::from_slice(&token_bytes).map_err(|_|"Invalid tokenizer response")?;
+        let count = tokens["count"].as_u64().ok_or("Tokenizer did not report prompt token count")?;
+        validate_paid_context(count, max_output, tokens["max_model_len"].as_u64().unwrap_or(8192))?;
+    }
+    let mut r=client.post(format!("http://127.0.0.1:{port}/v1/chat/completions")).header("Host",host).bearer_auth(key).json(&json!({"model":"qwen3-8b-awq","messages":messages,"temperature":0.7,"max_tokens":max_output,"stream":false,"chat_template_kwargs":{"enable_thinking":false}})).send().await.map_err(|_|"Provider did not respond to the trial")?;
     if !r.status().is_success() {
         return Err("Provider could not complete this trial".into());
     }
@@ -132,7 +167,7 @@ pub(crate) async fn generate(
         .await
         .map_err(|_| "Trial response transfer failed")?
     {
-        if bytes.len() + chunk.len() > 65536 {
+        if bytes.len() + chunk.len() > if paid {262144} else {65536} {
             return Err("Provider response exceeded the trial limit".into());
         }
         bytes.extend_from_slice(&chunk);
@@ -152,7 +187,7 @@ pub(crate) async fn generate(
     let total = usage["total_tokens"]
         .as_u64()
         .ok_or("Missing token accounting")?;
-    if a == 0 || b == 0 || b > max_output || a.checked_add(b) != Some(total) {
+    if (paid && a.checked_add(max_output).filter(|total| *total <= 8192).is_none()) || a == 0 || b == 0 || b > max_output || a.checked_add(b) != Some(total) {
         return Err("Invalid trial token accounting".into());
     }
     let finish = v["choices"][0]["finish_reason"].as_str().unwrap_or("");
@@ -323,6 +358,14 @@ pub async fn handle(app: &App, user: &str, id: &str, method: &str, body: &[u8]) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn paid_context_boundaries() {
+        assert!(validate_paid_context(4096,4096,8192).is_ok());
+        assert!(validate_paid_context(4097,4096,8192).is_err());
+        assert!(validate_paid_context(15,4096,4096).is_err());
+        assert!(validate_paid_context(1,4097,32768).is_err());
+        assert!(validate_paid_context(u64::MAX,16,8192).is_err());
+    }
     #[test]
     fn prompt_boundaries() {
         assert!(!valid_prompt("   "));

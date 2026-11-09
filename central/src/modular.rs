@@ -518,15 +518,15 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             .upsert(true)
             .await
             .map_err(unavailable)?;
-        return Ok(Json(json!({"transaction":transaction})));
+        return Ok(Json(json!({ "transaction": transaction })));
     }
     if action == "reserve" {
         let input: Reserve = serde_json::from_slice(body)
             .map_err(|_| error(StatusCode::BAD_REQUEST, "Provide maximum"))?;
-        if !(16..=256).contains(&input.maximum) {
+        if !(16..=4096).contains(&input.maximum) {
             return Err(error(
                 StatusCode::BAD_REQUEST,
-                "Use 16–256 maximum output tokens",
+                "Use 16–4096 maximum output tokens",
             ));
         }
         let a = account(app, &g, id, &wallet, "finalized")
@@ -602,7 +602,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             .map_err(|_| error(StatusCode::BAD_REQUEST, "Provide reservation_id and prompt"))?;
         if !valid_hash(&input.reservation_id)
             || input.prompt.trim().is_empty()
-            || input.prompt.chars().count() > 500
+            || input.prompt.len() > 65536
         {
             return Err(error(
                 StatusCode::BAD_REQUEST,
@@ -646,7 +646,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             .rpc("eth_getBlockByNumber", json!(["latest", false]))
             .await
             .map_err(problem)?;
-        if abi::uint(head["timestamp"].as_str().unwrap_or("")).map_err(problem)? + 120
+        if abi::uint(head["timestamp"].as_str().unwrap_or("")).map_err(problem)? + 660
             >= row.get_i64("expiry").map_err(unavailable)? as u128
         {
             return Err(error(
@@ -656,7 +656,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
         }
         let secret = crate::rpc_credentials::paid_key(&p).map_err(problem)?;
         let lease = format!("project:{id}");
-        crate::trial::take_lease(app, &lease, rid).await?;
+        crate::trial::take_lease_seconds(app, &lease, rid, 720).await?;
         let claimed = requests
             .update_one(
                 doc! {"_id":rid,"status":"prepared"},
@@ -668,7 +668,7 @@ pub async fn handle(app: &App, user: &str, path: &str, method: &str, body: &[u8]
             crate::trial::release(app, &[lease], rid).await;
             return Err(error(StatusCode::CONFLICT, "Request already started"));
         }
-        let output = crate::trial::generate(&p, &secret, &input.prompt, maximum).await;
+        let output = crate::trial::generate_paid(&p, &secret, &input.prompt, maximum).await;
         let answer = match output {
             Ok(result) => {
                 let amount = result["usage"]["completion_tokens"].as_u64().unwrap_or(0);
