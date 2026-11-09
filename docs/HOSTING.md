@@ -162,3 +162,7 @@ container as necessary and restarts the connector; cached model files remain.
 Existing API mode accepts `--port` only and leaves the external model running.
 After startup, run Test RPC on the project page. Use separate directories for
 separate launches. An occupied port not owned by this instance is rejected.
+
+### Published serving limits
+
+The installer default for Qwen3 8B AWQ is 8,192 total context tokens (input plus output). Existing installations must be checked separately; this default is not a measured provider guarantee. RPC verification permits up to 4,096 output tokens. The current paid API permits 16–256 output tokens and at most 500 prompt characters per request. One credit pays for one completion token; input tokens are not charged in this test. These distinct limits are displayed in the model catalog, provider listings and both purchase flows. Buyers should compare serving limits alongside price. Per-provider contractual limits and context-capacity verification remain future work.
